@@ -1,4 +1,5 @@
 from typing import Any, Callable, Dict, List, Optional
+from blspy import AugSchemeMPL, G1Element
 
 from chia.consensus.block_record import BlockRecord
 from chia.consensus.pos_quality import UI_ACTUAL_SPACE_CONSTANT_FACTOR
@@ -37,6 +38,11 @@ class FullNodeRpcApi:
             "/get_recent_signage_point_or_eos": self.get_recent_signage_point_or_eos,
             # Singletons
             "/get_p2_puzzle_hash_from_launcher_id": self.get_p2_puzzle_hash_from_launcher_id,
+
+            # Blspy Operations
+            "/aggregate_verify": self.aggregate_verify,
+            # ChiaPos Operations
+
             # Coins
             "/get_coin_records_by_puzzle_hash": self.get_coin_records_by_puzzle_hash,
             "/get_coin_records_by_puzzle_hashes": self.get_coin_records_by_puzzle_hashes,
@@ -63,6 +69,21 @@ class FullNodeRpcApi:
             )
             return payloads
         return []
+    
+    async def aggregateVerify(self, request: Dict):
+        pk1: G1Element = G1Element.from_bytes(bytes.fromhex(request["owner_pk"]))
+        m1: bytes = bytes.fromhex(request["authentication_key_info"])
+        pk2: G1Element = G1Element.from_bytes(bytes.fromhex(request["plot_public_key"]))
+        m2: bytes = bytes.fromhex(request["payload_hash"])
+        pk3: G1Element = G1Element.from_bytes(bytes.fromhex(request["authentication_public_key"]))
+        
+        sig: bytes = bytes.fromhex(request["signature"])
+
+        valid_sig = AugSchemeMPL.aggregate_verify(
+            [pk1, pk2, pk3], [m1, m2, m2], sig
+        )
+
+        return {"valid_signature": valid_sig}
 
     async def get_p2_puzzle_hash_from_launcher_id(self, request: Dict):
         launcher_Id = request["launcher_id"]
