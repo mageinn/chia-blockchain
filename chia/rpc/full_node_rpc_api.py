@@ -16,7 +16,7 @@ from chia.types.unfinished_header_block import UnfinishedHeaderBlock
 from chia.util.byte_types import hexstr_to_bytes
 from chia.util.ints import uint32, uint64, uint128
 from chia.util.ws_message import WsRpcMessage, create_payload_dict
-
+from chia.pools.pool_puzzles import launcher_id_to_p2_puzzle_hash
 
 class FullNodeRpcApi:
     def __init__(self, service: FullNode):
@@ -39,6 +39,8 @@ class FullNodeRpcApi:
             "/get_initial_freeze_period": self.get_initial_freeze_period,
             "/get_network_info": self.get_network_info,
             "/get_recent_signage_point_or_eos": self.get_recent_signage_point_or_eos,
+            # Singletons
+            "/get_p2_puzzle_hash_from_launcher_id": self.get_p2_puzzle_hash_from_launcher_id,
             # Coins
             "/get_coin_records_by_puzzle_hash": self.get_coin_records_by_puzzle_hash,
             "/get_coin_records_by_puzzle_hashes": self.get_coin_records_by_puzzle_hashes,
@@ -66,6 +68,11 @@ class FullNodeRpcApi:
             )
             return payloads
         return []
+
+    async def get_p2_puzzle_hash_from_launcher_id(self, request: Dict):
+        launcher_Id = request["launcher_id"]
+        p2_puzzle_hash = launcher_id_to_p2_puzzle_hash(launcher_Id)
+        return {"p2_puzzle_hash": p2_puzzle_hash}
 
     async def get_initial_freeze_period(self, _: Dict):
         freeze_period = self.service.constants.INITIAL_FREEZE_END_TIMESTAMP
