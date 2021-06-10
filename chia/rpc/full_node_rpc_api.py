@@ -75,7 +75,7 @@ class FullNodeRpcApi:
             return payloads
         return []
     
-    async def aggregateVerify(self, request: Dict):
+    async def aggregate_verify(self, request: Dict):
         pk1: G1Element = G1Element.from_bytes(bytes.fromhex(request["owner_pk"]))
         m1: bytes = bytes.fromhex(request["authentication_key_info"])
         pk2: G1Element = G1Element.from_bytes(bytes.fromhex(request["plot_public_key"]))
