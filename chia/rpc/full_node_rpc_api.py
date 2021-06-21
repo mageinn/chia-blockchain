@@ -43,12 +43,11 @@ class FullNodeRpcApi:
             "/get_recent_signage_point_or_eos": self.get_recent_signage_point_or_eos,
             # Singletons
             "/get_p2_puzzle_hash_from_launcher_id": self.get_p2_puzzle_hash_from_launcher_id,
-
             # Blspy Operations
-            "/aggregate_verify": self.aggregate_verify,
+            "/aggregate_verify_signature": self.aggregate_verify_signature,
+            "/verify_signature": self.verify_signature,
             # ChiaPos Operations
             "/get_proof_quality_string": self.get_proof_quality_string,
-
             # Coins
             "/get_coin_records_by_puzzle_hash": self.get_coin_records_by_puzzle_hash,
             "/get_coin_records_by_puzzle_hashes": self.get_coin_records_by_puzzle_hashes,
@@ -77,7 +76,7 @@ class FullNodeRpcApi:
             return payloads
         return []
     
-    async def aggregate_verify(self, request: Dict):
+    async def aggregate_verify_signature(self, request: Dict):
         pk1: G1Element = G1Element.from_bytes(bytes.fromhex(request["owner_pk"]))
         m1: bytes = bytes.fromhex(request["authentication_key_info"])
         pk2: G1Element = G1Element.from_bytes(bytes.fromhex(request["plot_public_key"]))
@@ -90,7 +89,28 @@ class FullNodeRpcApi:
             [pk1, pk2, pk3], [m1, m2, m2], sig
         )
 
-        return {"valid_signature": valid_sig}
+        return {"valid": valid_sig}
+
+    async def verify_signature(self, request: Dict):
+        ownerPk = bytes.fromhex(request["owner_pk"])
+        payloadHash = bytes.fromhex(request["payload_hash"])
+        signature = bytes.fromhex(request["signature"])
+
+        valid_sig = AugSchemeMPL.verify(ownerPk, payloadHash, signature)
+
+        return {"valid": valid_sig}
+
+
+    async def get_proof_quality_string(self, request: Dict):
+        plotId = bytes.fromhex(request["plotId"])
+        size = int(request["size"])
+        challenge = bytes.fromhex(request["challenge"])
+        proof = bytes.fromhex(request["proof"])
+        quality_str = Verifier().validate_proof(plot_id, size, challenge, proof)
+        if (quality_str is None):
+            return {"valid": False }
+        else:
+            return {"valid:": True, "quality_str": quality_str }
 
     async def get_proof_quality_string(self, request: Dict):
         plot_id = bytes.fromhex(request["plot_id"])
