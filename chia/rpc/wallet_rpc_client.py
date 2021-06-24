@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 
 from chia.pools.pool_wallet_info import PoolWalletInfo
 from chia.rpc.rpc_client import RpcClient
@@ -145,6 +145,13 @@ class WalletRpcClient(RpcClient):
             )
         return TransactionRecord.from_json_dict(response["transaction"])
 
+    async def delete_unconfirmed_transactions(self, wallet_id: str) -> None:
+        await self.fetch(
+            "delete_unconfirmed_transactions",
+            {"wallet_id": wallet_id},
+        )
+        return None
+
     async def create_backup(self, file_path: Path) -> None:
         return await self.fetch("create_backup", {"file_path": str(file_path.resolve())})
 
@@ -195,24 +202,30 @@ class WalletRpcClient(RpcClient):
         res = await self.fetch("create_new_wallet", request)
         return TransactionRecord.from_json_dict(res["transaction"])
 
-    async def pw_self_pool(self, wallet_id: str):
-        return await self.fetch("pw_self_pool", {"wallet_id": wallet_id})
+    async def pw_self_pool(self, wallet_id: str) -> TransactionRecord:
+        return TransactionRecord.from_json_dict(
+            (await self.fetch("pw_self_pool", {"wallet_id": wallet_id}))["transaction"]
+        )
 
     async def pw_join_pool(
         self, wallet_id: str, target_puzzlehash: bytes32, pool_url: str, relative_lock_height: uint32
-    ):
+    ) -> TransactionRecord:
         request = {
             "wallet_id": int(wallet_id),
             "target_puzzlehash": target_puzzlehash.hex(),
             "relative_lock_height": relative_lock_height,
             "pool_url": pool_url,
         }
-        return await self.fetch("pw_join_pool", request)
+        return TransactionRecord.from_json_dict((await self.fetch("pw_join_pool", request))["transaction"])
 
     async def pw_absorb_rewards(self, wallet_id: str, fee: uint64 = uint64(0)) -> TransactionRecord:
         return TransactionRecord.from_json_dict(
             (await self.fetch("pw_absorb_rewards", {"wallet_id": wallet_id, "fee": fee}))["transaction"]
         )
 
-    async def pw_status(self, wallet_id: str) -> PoolWalletInfo:
-        return PoolWalletInfo.from_json_dict((await self.fetch("pw_status", {"wallet_id": wallet_id}))["state"])
+    async def pw_status(self, wallet_id: str) -> Tuple[PoolWalletInfo, List[TransactionRecord]]:
+        json_dict = await self.fetch("pw_status", {"wallet_id": wallet_id})
+        return (
+            PoolWalletInfo.from_json_dict(json_dict["state"]),
+            [TransactionRecord.from_json_dict(tr) for tr in json_dict["unconfirmed_transactions"]],
+        )

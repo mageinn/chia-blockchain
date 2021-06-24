@@ -10,7 +10,7 @@ from blspy import PrivateKey, G1Element
 from chia.cmds.init_funcs import check_keys
 from chia.consensus.block_rewards import calculate_base_farmer_reward
 from chia.pools.pool_wallet import PoolWallet
-from chia.pools.pool_wallet_info import create_pool_state, FARMING_TO_POOL, PoolWalletInfo
+from chia.pools.pool_wallet_info import create_pool_state, FARMING_TO_POOL, PoolWalletInfo, PoolState
 from chia.protocols.protocol_message_types import ProtocolMessageTypes
 from chia.server.outbound_message import NodeType, make_msg
 from chia.simulator.simulator_protocol import FarmNewBlockProtocol
@@ -25,6 +25,7 @@ from chia.util.ws_message import WsRpcMessage, create_payload_dict
 from chia.wallet.cc_wallet.cc_wallet import CCWallet
 from chia.wallet.derive_keys import master_sk_to_singleton_owner_sk
 from chia.wallet.rl_wallet.rl_wallet import RLWallet
+from chia.wallet.derive_keys import master_sk_to_farmer_sk, master_sk_to_pool_sk
 from chia.wallet.did_wallet.did_wallet import DIDWallet
 from chia.wallet.trade_record import TradeRecord
 from chia.wallet.transaction_record import TransactionRecord
@@ -77,6 +78,7 @@ class WalletRpcApi:
             "/get_transaction_count": self.get_transaction_count,
             "/get_farmed_amount": self.get_farmed_amount,
             "/create_signed_transaction": self.create_signed_transaction,
+            "/delete_unconfirmed_transactions": self.delete_unconfirmed_transactions,
             # Coloured coins and trading
             "/cc_set_name": self.cc_set_name,
             "/cc_get_name": self.cc_get_name,
@@ -211,6 +213,8 @@ class WalletRpcApi:
                     "fingerprint": fingerprint,
                     "sk": bytes(sk).hex(),
                     "pk": bytes(sk.get_g1()).hex(),
+                    "farmer_pk": bytes(master_sk_to_farmer_sk(sk).get_g1()).hex(),
+                    "pool_pk": bytes(master_sk_to_pool_sk(sk).get_g1()).hex(),
                     "seed": s,
                 },
             }
@@ -669,6 +673,19 @@ class WalletRpcApi:
             "transaction_id": transaction.name,
         }
 
+    async def delete_unconfirmed_transactions(self, request):
+        wallet_id = int(request["wallet_id"])
+        if wallet_id not in self.service.wallet_state_manager.wallets:
+            raise ValueError(f"Wallet id {wallet_id} does not exist")
+        async with self.service.wallet_state_manager.lock:
+            async with self.service.wallet_state_manager.tx_store.db_wrapper.lock:
+                await self.service.wallet_state_manager.tx_store.db_wrapper.begin_transaction()
+                await self.service.wallet_state_manager.tx_store.delete_unconfirmed_transactions(wallet_id)
+                await self.service.wallet_state_manager.tx_store.db_wrapper.commit_transaction()
+                # Update the cache
+                await self.service.wallet_state_manager.tx_store.rebuild_tx_cache()
+                return {}
+
     async def get_transaction_count(self, request):
         wallet_id = int(request["wallet_id"])
         count = await self.service.wallet_state_manager.tx_store.get_transaction_count_for_wallet(wallet_id)
@@ -1026,14 +1043,19 @@ class WalletRpcApi:
         fee_amount = 0
         last_height_farmed = 0
         for record in tx_records:
-            height = record.height_farmed(self.service.constants.GENESIS_CHALLENGE)
-            if height > last_height_farmed:
-                last_height_farmed = height
+            if record.wallet_id not in self.service.wallet_state_manager.wallets:
+                continue
             if record.type == TransactionType.COINBASE_REWARD:
+                if self.service.wallet_state_manager.wallets[record.wallet_id].type() == WalletType.POOLING_WALLET:
+                    # Don't add pool rewards for pool wallets.
+                    continue
                 pool_reward_amount += record.amount
+            height = record.height_farmed(self.service.constants.GENESIS_CHALLENGE)
             if record.type == TransactionType.FEE_REWARD:
                 fee_amount += record.amount - calculate_base_farmer_reward(height)
                 farmer_reward_amount += calculate_base_farmer_reward(height)
+            if height > last_height_farmed:
+                last_height_farmed = height
             amount += record.amount
 
         assert amount == pool_reward_amount + farmer_reward_amount + fee_amount
@@ -1096,7 +1118,7 @@ class WalletRpcApi:
         target_puzzlehash = None
         if "target_puzzlehash" in request:
             target_puzzlehash = bytes32(hexstr_to_bytes(request["target_puzzlehash"]))
-        new_target_state = create_pool_state(
+        new_target_state: PoolState = create_pool_state(
             FARMING_TO_POOL,
             target_puzzlehash,
             owner_pubkey,
@@ -1139,6 +1161,8 @@ class WalletRpcApi:
         if wallet.type() != WalletType.POOLING_WALLET.value:
             raise ValueError(f"wallet_id {wallet_id} is not a pooling wallet")
         state: PoolWalletInfo = await wallet.get_current_state()
+        unconfirmed_transactions: List[TransactionRecord] = await wallet.get_unconfirmed_transactions()
         return {
             "state": state.to_json_dict(),
+            "unconfirmed_transactions": unconfirmed_transactions,
         }
