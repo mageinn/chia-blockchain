@@ -1,4 +1,6 @@
 from typing import Any, Callable, Dict, List, Optional
+from blspy import AugSchemeMPL, G1Element
+from chiapos import Verifier
 
 from chia.consensus.block_record import BlockRecord
 from chia.consensus.pos_quality import UI_ACTUAL_SPACE_CONSTANT_FACTOR
@@ -16,7 +18,7 @@ from chia.types.unfinished_header_block import UnfinishedHeaderBlock
 from chia.util.byte_types import hexstr_to_bytes
 from chia.util.ints import uint32, uint64, uint128
 from chia.util.ws_message import WsRpcMessage, create_payload_dict
-
+from chia.pools.pool_puzzles import launcher_id_to_p2_puzzle_hash, solution_to_extra_data, get_delayed_puz_info_from_launcher_spend
 
 class FullNodeRpcApi:
     def __init__(self, service: FullNode):
@@ -39,6 +41,15 @@ class FullNodeRpcApi:
             "/get_initial_freeze_period": self.get_initial_freeze_period,
             "/get_network_info": self.get_network_info,
             "/get_recent_signage_point_or_eos": self.get_recent_signage_point_or_eos,
+            # Singletons
+            "/get_p2_puzzle_hash_from_launcher_id": self.get_p2_puzzle_hash_from_launcher_id,
+            # Blspy Operations
+            "/aggregate_verify_signature": self.aggregate_verify_signature,
+            "/verify_signature": self.verify_signature,
+            # ChiaPos Operations
+            "/get_proof_quality_string": self.get_proof_quality_string,
+            # Pool Stuff
+            "get_delayed_puz_info_from_launcher_spend": self.get_delayed_puz_info_from_launcher_spend_request,
             # Coins
             "/get_coin_records_by_puzzle_hash": self.get_coin_records_by_puzzle_hash,
             "/get_coin_records_by_puzzle_hashes": self.get_coin_records_by_puzzle_hashes,
@@ -66,7 +77,69 @@ class FullNodeRpcApi:
             )
             return payloads
         return []
+    
+    async def aggregate_verify_signature(self, request: Dict):
+        pk1: G1Element = G1Element.from_bytes(bytes.fromhex(request["owner_pk"]))
+        m1: bytes = bytes.fromhex(request["authentication_key_info"])
+        pk2: G1Element = G1Element.from_bytes(bytes.fromhex(request["plot_public_key"]))
+        m2: bytes = bytes.fromhex(request["payload_hash"])
+        pk3: G1Element = G1Element.from_bytes(bytes.fromhex(request["authentication_public_key"]))
+        
+        sig: bytes = bytes.fromhex(request["signature"])
 
+        valid_sig = AugSchemeMPL.aggregate_verify(
+            [pk1, pk2, pk3], [m1, m2, m2], sig
+        )
+
+        return {"valid": valid_sig}
+
+    async def verify_signature(self, request: Dict):
+        ownerPk = bytes.fromhex(request["owner_pk"])
+        payloadHash = bytes.fromhex(request["payload_hash"])
+        signature = bytes.fromhex(request["signature"])
+
+        valid_sig = AugSchemeMPL.verify(ownerPk, payloadHash, signature)
+
+        return {"valid": valid_sig}
+
+    async def get_proof_quality_string(self, request: Dict):
+        plotId = bytes.fromhex(request["plotId"])
+        size = int(request["size"])
+        challenge = bytes.fromhex(request["challenge"])
+        proof = bytes.fromhex(request["proof"])
+        quality_str = Verifier().validate_proof(plot_id, size, challenge, proof)
+        if (quality_str is None):
+            return {"valid": False }
+        else:
+            return {"valid:": True, "quality_str": quality_str }
+
+    async def get_proof_quality_string(self, request: Dict):
+        plot_id = bytes.fromhex(request["plot_id"])
+        size = int(request["size"])
+        challenge = bytes.fromhex(request["challenge"])
+        proof = bytes.fromhex(request["proof"])
+
+        quality_str = Verifier().validate_proof(plot_id, size, challenge, proof)
+
+        if not quality_str:
+            return {"valid": False } 
+
+        return {"valid": True, "quality_str": quality_str.hex() }
+
+    async def get_p2_puzzle_hash_from_launcher_id(self, request: Dict):
+        launcher_Id = request["launcher_id"]
+        seconds = request["seconds"]
+        delayed_puzzle_hash = request["delayed_puzzle_hash"]
+
+        p2_puzzle_hash = launcher_id_to_p2_puzzle_hash(launcher_Id, seconds, delayed_puzzle_hash)
+        return {"p2_puzzle_hash": p2_puzzle_hash}
+
+    async def get_delayed_puz_info_from_launcher_spend_request(self, request: Dict):
+        coin_sol = CoinSolution.from_json_dict(request)
+        seconds, delayed_puzzle_hash = get_delayed_puz_info_from_launcher_spend(coin_sol)
+
+        return {"seconds": seconds, "delayed_puzzle_hash": delayed_puzzle_hash}
+            
     async def get_initial_freeze_period(self, _: Dict):
         freeze_period = self.service.constants.INITIAL_FREEZE_END_TIMESTAMP
         return {"INITIAL_FREEZE_END_TIMESTAMP": freeze_period}
