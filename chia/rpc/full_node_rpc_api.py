@@ -128,7 +128,10 @@ class FullNodeRpcApi:
 
     async def get_p2_puzzle_hash_from_launcher_id(self, request: Dict):
         launcher_Id = request["launcher_id"]
-        p2_puzzle_hash = launcher_id_to_p2_puzzle_hash(launcher_Id)
+        seconds = request["seconds"]
+        delayed_puzzle_hash = request["delayed_puzzle_hash"]
+
+        p2_puzzle_hash = launcher_id_to_p2_puzzle_hash(launcher_Id, seconds, delayed_puzzle_hash)
         return {"p2_puzzle_hash": p2_puzzle_hash}
 
     async def get_delayed_puz_info_from_launcher_spend_request(self, request: Dict):
