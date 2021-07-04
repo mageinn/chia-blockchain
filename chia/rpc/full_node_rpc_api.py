@@ -18,7 +18,7 @@ from chia.types.unfinished_header_block import UnfinishedHeaderBlock
 from chia.util.byte_types import hexstr_to_bytes
 from chia.util.ints import uint32, uint64, uint128
 from chia.util.ws_message import WsRpcMessage, create_payload_dict
-from chia.pools.pool_puzzles import launcher_id_to_p2_puzzle_hash
+from chia.pools.pool_puzzles import launcher_id_to_p2_puzzle_hash, solution_to_extra_data, get_delayed_puz_info_from_launcher_spend
 
 class FullNodeRpcApi:
     def __init__(self, service: FullNode):
@@ -48,6 +48,8 @@ class FullNodeRpcApi:
             "/verify_signature": self.verify_signature,
             # ChiaPos Operations
             "/get_proof_quality_string": self.get_proof_quality_string,
+            # Pool Stuff
+            "get_delayed_puz_info_from_launcher_spend": self.get_delayed_puz_info_from_launcher_spend_request,
             # Coins
             "/get_coin_records_by_puzzle_hash": self.get_coin_records_by_puzzle_hash,
             "/get_coin_records_by_puzzle_hashes": self.get_coin_records_by_puzzle_hashes,
@@ -100,7 +102,6 @@ class FullNodeRpcApi:
 
         return {"valid": valid_sig}
 
-
     async def get_proof_quality_string(self, request: Dict):
         plotId = bytes.fromhex(request["plotId"])
         size = int(request["size"])
@@ -130,6 +131,12 @@ class FullNodeRpcApi:
         p2_puzzle_hash = launcher_id_to_p2_puzzle_hash(launcher_Id)
         return {"p2_puzzle_hash": p2_puzzle_hash}
 
+    async def get_delayed_puz_info_from_launcher_spend_request(self, request: Dict):
+        coin_sol = CoinSolution.from_json_dict(request)
+        seconds, delayed_puzzle_hash = get_delayed_puz_info_from_launcher_spend(coin_sol)
+
+        return {"seconds": seconds, "delayed_puzzle_hash": delayed_puzzle_hash}
+            
     async def get_initial_freeze_period(self, _: Dict):
         freeze_period = self.service.constants.INITIAL_FREEZE_END_TIMESTAMP
         return {"INITIAL_FREEZE_END_TIMESTAMP": freeze_period}
