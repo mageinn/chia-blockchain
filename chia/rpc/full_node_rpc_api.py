@@ -18,7 +18,14 @@ from chia.types.unfinished_header_block import UnfinishedHeaderBlock
 from chia.util.byte_types import hexstr_to_bytes
 from chia.util.ints import uint32, uint64, uint128
 from chia.util.ws_message import WsRpcMessage, create_payload_dict
-from chia.pools.pool_puzzles import launcher_id_to_p2_puzzle_hash, solution_to_extra_data, get_delayed_puz_info_from_launcher_spend
+from chia.pools.pool_puzzles import (
+    launcher_id_to_p2_puzzle_hash, 
+    solution_to_extra_data, 
+    get_delayed_puz_info_from_launcher_spend,
+    pool_state_to_inner_puzzle,
+    create_full_puzzle,
+)
+from chia.pools.pool_wallet_info import PoolState
 
 class FullNodeRpcApi:
     def __init__(self, service: FullNode):
@@ -50,6 +57,7 @@ class FullNodeRpcApi:
             "/get_proof_quality_string": self.get_proof_quality_string,
             # Pool Stuff
             "get_delayed_puz_info_from_launcher_spend": self.get_delayed_puz_info_from_launcher_spend_request,
+            "validate_puzzle_hash": self.validate_puzzle_hash,
             # Coins
             "/get_coin_records_by_puzzle_hash": self.get_coin_records_by_puzzle_hash,
             "/get_coin_records_by_puzzle_hashes": self.get_coin_records_by_puzzle_hashes,
@@ -140,6 +148,21 @@ class FullNodeRpcApi:
 
         return {"seconds": seconds, "delayed_puzzle_hash": delayed_puzzle_hash}
             
+    async def validate_puzzle_hash(self, request: Dict):
+        launcher_id = bytes.fromhex(request["launcher_id"])
+        delay_ph = bytes.fromhex(request["delay_ph"])
+        delay_time = int(request["delay_time"])
+        pool_state = PoolState.from_json_dict(request["pool_state"])
+        outer_puzzle_hash = bytes.fromhex(request["outer_puzzle_hash"])
+        genesis_challenge = bytes.fromhex(request["genesis_challenge"])
+
+        inner_puzzle: Program = pool_state_to_inner_puzzle(pool_state, launcher_id, genesis_challenge, delay_time, delay_ph)
+        new_full_puzzle: Program = create_full_puzzle(inner_puzzle, launcher_id)
+        valid_puzzle_hash = new_full_puzzle.get_tree_hash() == outer_puzzle_hash
+
+        return {"valid": valid_puzzle_hash}
+
+
     async def get_initial_freeze_period(self, _: Dict):
         freeze_period = self.service.constants.INITIAL_FREEZE_END_TIMESTAMP
         return {"INITIAL_FREEZE_END_TIMESTAMP": freeze_period}
