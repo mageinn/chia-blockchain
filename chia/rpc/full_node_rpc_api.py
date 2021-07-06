@@ -56,8 +56,9 @@ class FullNodeRpcApi:
             # ChiaPos Operations
             "/get_proof_quality_string": self.get_proof_quality_string,
             # Pool Stuff
-            "get_delayed_puz_info_from_launcher_spend": self.get_delayed_puz_info_from_launcher_spend_request,
-            "validate_puzzle_hash": self.validate_puzzle_hash,
+            "/get_delayed_puz_info_from_launcher_spend": self.get_delayed_puz_info_from_launcher_spend_request,
+            "/get_pool_state_from_coin_spend": self.get_pool_state_from_coin_spend,
+            "/validate_puzzle_hash": self.validate_puzzle_hash,
             # Coins
             "/get_coin_records_by_puzzle_hash": self.get_coin_records_by_puzzle_hash,
             "/get_coin_records_by_puzzle_hashes": self.get_coin_records_by_puzzle_hashes,
@@ -148,6 +149,13 @@ class FullNodeRpcApi:
 
         return {"seconds": seconds, "delayed_puzzle_hash": delayed_puzzle_hash}
             
+    async def get_pool_state_from_coin_spend(self, request: Dict):
+        coin_sol = CoinSolution.from_json_dict(request)
+        pool_state = solution_to_extra_data(coin_sol)
+        has_value = pool_state != None
+        
+        return {"has_value":has_value, "pool_state":pool_state}
+
     async def validate_puzzle_hash(self, request: Dict):
         launcher_id = bytes.fromhex(request["launcher_id"])
         delay_ph = bytes.fromhex(request["delay_ph"])
