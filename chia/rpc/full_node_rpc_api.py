@@ -1,4 +1,6 @@
 from typing import Any, Callable, Dict, List, Optional
+from blspy import AugSchemeMPL, G1Element
+from chiapos import Verifier
 
 from chia.consensus.block_record import BlockRecord
 from chia.consensus.pos_quality import UI_ACTUAL_SPACE_CONSTANT_FACTOR
@@ -16,7 +18,15 @@ from chia.types.unfinished_header_block import UnfinishedHeaderBlock
 from chia.util.byte_types import hexstr_to_bytes
 from chia.util.ints import uint32, uint64, uint128
 from chia.util.ws_message import WsRpcMessage, create_payload_dict
-
+from chia.pools.pool_puzzles import (
+    launcher_id_to_p2_puzzle_hash, 
+    solution_to_extra_data, 
+    get_delayed_puz_info_from_launcher_spend,
+    pool_state_to_inner_puzzle,
+    create_full_puzzle,
+    get_most_recent_singleton_coin_from_coin_solution
+)
+from chia.pools.pool_wallet_info import PoolState
 
 class FullNodeRpcApi:
     def __init__(self, service: FullNode):
@@ -39,6 +49,17 @@ class FullNodeRpcApi:
             "/get_initial_freeze_period": self.get_initial_freeze_period,
             "/get_network_info": self.get_network_info,
             "/get_recent_signage_point_or_eos": self.get_recent_signage_point_or_eos,
+            # Singletons
+            "/get_singleton_state": self.get_singleton_state,
+            "/get_p2_puzzle_hash_from_launcher_id": self.get_p2_puzzle_hash_from_launcher_id,
+            # Blspy Operations
+            "/aggregate_verify_signature": self.aggregate_verify_signature,
+            "/verify_signature": self.verify_signature,
+            # ChiaPos Operations
+            "/get_proof_quality_string": self.get_proof_quality_string,
+            # Pool Stuff
+            "/get_delayed_puz_info_from_launcher_spend": self.get_delayed_puzzle_info_from_launcher_spend_request,
+            "/get_pool_state_from_coin_spend": self.get_pool_state_from_coin_spend,
             # Coins
             "/get_coin_records_by_puzzle_hash": self.get_coin_records_by_puzzle_hash,
             "/get_coin_records_by_puzzle_hashes": self.get_coin_records_by_puzzle_hashes,
@@ -66,6 +87,195 @@ class FullNodeRpcApi:
             )
             return payloads
         return []
+    
+    #Helper Method Area
+    async def get_coin_spend(coin_record: CoinRecord):
+        if coin_record is None or not coin_record.spent:
+            return None
+
+        header_hash = self.service.blockchain.height_to_hash(coin_record.spent_block_index)
+        block: Optional[FullBlock] = await self.service.block_store.get_full_block(header_hash)
+
+        if block is None or block.transactions_generator is None:
+            return None
+
+        block_generator: Optional[BlockGenerator] = await self.service.blockchain.get_block_generator(block)
+        assert block_generator is not None
+        error, puzzle, solution = get_puzzle_and_solution_for_coin(
+            block_generator, coin_name, self.service.constants.MAX_BLOCK_COST_CLVM
+        )
+        if error is not None:
+            return None
+
+        puzzle_ser: SerializedProgram = SerializedProgram.from_program(Program.to(puzzle))
+        solution_ser: SerializedProgram = SerializedProgram.from_program(Program.to(solution))
+        return CoinSolution(coin_record.coin, puzzle_ser, solution_ser)
+
+    async def validate_puzzle_hash(
+        launcher_id: bytes32,
+        delay_ph: bytes32,
+        delay_time: uint64,
+        pool_state: PoolState,
+        outer_puzzle_hash: bytes32,
+        genesis_challenge: bytes32,
+    ) -> bool:
+        inner_puzzle: Program = pool_state_to_inner_puzzle(pool_state, launcher_id, genesis_challenge, delay_time, delay_ph)
+        new_full_puzzle: Program = create_full_puzzle(inner_puzzle, launcher_id)
+        return new_full_puzzle.get_tree_hash() == outer_puzzle_hash
+
+    #Helper Method Area End
+
+    async def get_singleton_state(self, request: Dict):
+        try:
+            launcher_id = bytes.fromhex(request["launcher_id"])
+            confirmation_security_threshold = int(request["confirmation_security_threshold"])
+            genesis_challenge = self.service.constants.GENESIS_CHALLENGE
+
+            has_farmer_data = bool(request["has_farmer_data"])
+
+            peak: Optional[BlockRecord] = self.service.blockchain.get_peak()
+            peak_height = peak.height;
+
+            if peak is None or peak_height == 0:
+                return {"has_value": False}
+
+            if not has_farmer_data:
+                launcher_coin = await self.service.blockchain.coin_store.get_coin_record(launcher_id)
+                last_solution: await get_coin_spend(launcher_coin)
+
+                if last_solution is None:
+                    return {"has_value": False}
+
+                delay_time, delay_puzzle_hash = get_delayed_puz_info_from_launcher_spend(last_solution)
+                saved_state = solution_to_extra_data(last_solution)
+
+                if saved_state is None:
+                    return {"has_value": False}
+            else:
+                last_solution = CoinSolution.from_json_dict(request["singleton_tip"])
+                saved_state = PoolState.from_json_dict(request["singleton_tip_state"])
+                delay_time = int(request["delay_time"])
+                delay_puzzle_hash = bytes.fromhex(request["delay_puzzle_hash"])
+
+            saved_solution = last_solution
+            last_not_none_state: PoolState = saved_state
+            assert last_solution is not None
+
+            if launcher_coin is None:
+                last_coin_record: Optional[CoinRecord] =  await self.service.blockchain.coin_store.get_coin_record(last_solution.coin.name())
+            else:
+                last_coin_record: Optional[CoinRecord] = launcher_coin
+
+            assert last_coin_record is not None
+        
+            while True:
+                next_coin: Optional[Coin] = get_most_recent_singleton_coin_from_coin_solution(last_solution)
+
+                if next_coin is None:
+                    return {"has_value": False}
+
+                next_coin_record: Optional[CoinRecord] = await node_rpc_client.get_coin_record_by_name(next_coin.name())
+                assert next_coin_record is not None
+
+                if not next_coin_record.spent:
+                    if not validate_puzzle_hash(
+                        launcher_id,
+                        delay_puzzle_hash,
+                        delay_time,
+                        last_not_none_state,
+                        next_coin_record.coin.puzzle_hash,
+                        genesis_challenge,
+                    ):
+                        return {"has_value": False}
+                    break
+
+                last_solution: Optional[CoinSolution] = await get_coin_spend(node_rpc_client, next_coin_record)
+                assert last_solution is not None
+
+                pool_state: Optional[PoolState] = solution_to_extra_data(last_solution)
+
+                if pool_state is not None:
+                    last_not_none_state = pool_state
+                if peak_height - confirmation_security_threshold >= next_coin_record.spent_block_index:
+                    # There is a state transition, and it is sufficiently buried
+                    saved_solution = last_solution
+                    saved_state = last_not_none_state
+
+            return {"has_value":True, "singleton_state":{"buried_singleton_tip":saved_solution, "buried_singleton_tip_state":saved_state,"singleton_tip_state":last_not_none_state}}
+        except Exception as e:
+            return {"has_value": False} 
+        
+    async def aggregate_verify_signature(self, request: Dict):
+        pk1: G1Element = G1Element.from_bytes(bytes.fromhex(request["owner_pk"]))
+        m1: bytes = bytes.fromhex(request["authentication_key_info"])
+        pk2: G1Element = G1Element.from_bytes(bytes.fromhex(request["plot_public_key"]))
+        m2: bytes = bytes.fromhex(request["payload_hash"])
+        pk3: G1Element = G1Element.from_bytes(bytes.fromhex(request["authentication_public_key"]))
+        
+        sig: bytes = bytes.fromhex(request["signature"])
+
+        valid_sig = AugSchemeMPL.aggregate_verify(
+            [pk1, pk2, pk3], [m1, m2, m2], sig
+        )
+
+        return {"valid": valid_sig}
+
+    async def verify_signature(self, request: Dict):
+        ownerPk = bytes.fromhex(request["owner_pk"])
+        payloadHash = bytes.fromhex(request["payload_hash"])
+        signature = bytes.fromhex(request["signature"])
+
+        valid_sig = AugSchemeMPL.verify(ownerPk, payloadHash, signature)
+
+        return {"valid": valid_sig}
+
+    async def get_proof_quality_string(self, request: Dict):
+        plotId = bytes.fromhex(request["plotId"])
+        size = int(request["size"])
+        challenge = bytes.fromhex(request["challenge"])
+        proof = bytes.fromhex(request["proof"])
+        quality_str = Verifier().validate_proof(plot_id, size, challenge, proof)
+        if (quality_str is None):
+            return {"valid": False }
+        else:
+            return {"valid:": True, "quality_str": quality_str }
+
+    async def get_proof_quality_string(self, request: Dict):
+        plot_id = bytes.fromhex(request["plot_id"])
+        size = int(request["size"])
+        challenge = bytes.fromhex(request["challenge"])
+        proof = bytes.fromhex(request["proof"])
+
+        quality_str = Verifier().validate_proof(plot_id, size, challenge, proof)
+
+        if not quality_str:
+            return {"valid": False } 
+
+        return {"valid": True, "quality_str": quality_str.hex() }
+
+    async def get_p2_puzzle_hash_from_launcher_id(self, request: Dict):
+        launcher_Id = request["launcher_id"]
+        seconds = request["seconds"]
+        delayed_puzzle_hash = request["delayed_puzzle_hash"]
+
+        p2_puzzle_hash = launcher_id_to_p2_puzzle_hash(launcher_Id, seconds, delayed_puzzle_hash)
+        return {"p2_puzzle_hash": p2_puzzle_hash}
+
+    async def get_delayed_puzzle_info_from_launcher_spend_request(self, request: Dict):
+        coin_sol = CoinSolution.from_json_dict(request)
+        seconds, delayed_puzzle_hash = get_delayed_puz_info_from_launcher_spend(coin_sol)
+
+        return {"seconds": seconds, "delayed_puzzle_hash": delayed_puzzle_hash}
+            
+    async def get_pool_state_from_coin_spend(self, request: Dict):
+        coin_sol = CoinSolution.from_json_dict(request)
+        pool_state = solution_to_extra_data(coin_sol)
+        has_value = pool_state != None
+        
+        return {"has_value":has_value, "pool_state":pool_state}
+
+
+
 
     async def get_initial_freeze_period(self, _: Dict):
         freeze_period = self.service.constants.INITIAL_FREEZE_END_TIMESTAMP
@@ -184,7 +394,7 @@ class FullNodeRpcApi:
             curr: Optional[BlockRecord] = self.service.blockchain.get_peak()
             if curr is None:
                 raise ValueError("No blocks in the chain")
-
+            
             number_of_slots_searched = 0
             while number_of_slots_searched < 10:
                 if curr.first_in_sub_slot:
