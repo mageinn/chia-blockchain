@@ -66,6 +66,7 @@ jobs:
         run: |
           unset HAS_APPLE_SECRET
           unset HAS_AWS_SECRET
+
           if [ -n "$APPLE_SECRET" ]; then HAS_APPLE_SECRET='true' ; fi
           echo ::set-output name=HAS_APPLE_SECRET::${HAS_APPLE_SECRET}
 
@@ -166,7 +167,7 @@ jobs:
         run: |
           arch -arm64 aws s3 cp ${{ github.workspace }}/build_scripts/final_installer/Chia-${{ steps.version_number.outputs.CHIA_INSTALLER_VERSION }}-arm64.dmg s3://download-chia-net/install/
           arch -arm64 aws s3 cp ${{ github.workspace }}/build_scripts/final_installer/Chia-${{ steps.version_number.outputs.CHIA_INSTALLER_VERSION }}-arm64.dmg.sha256 s3://download-chia-net/install/
-          arch -arm64 aws s3 cp ${{ github.workspace }}/build_scripts/final_installer/Chia-${{ steps.version_number.outputs.CHIA_INSTALLER_VERSION }}-arm64.dmg.torrent s3://download-chia-net/install/
+          arch -arm64 aws s3 cp ${{ github.workspace }}/build_scripts/final_installer/Chia-${{ steps.version_number.outputs.CHIA_INSTALLER_VERSION }}-arm64.dmg.torrent s3://download-chia-net/torrents/
 
       - name: Get tag name
         if: startsWith(github.ref, 'refs/tags/')
