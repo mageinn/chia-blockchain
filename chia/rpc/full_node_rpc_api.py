@@ -207,16 +207,13 @@ class FullNodeRpcApi:
             return {"has_value": False} 
         
     async def aggregate_verify_signature(self, request: Dict):
-        pk1: G1Element = G1Element.from_bytes(bytes.fromhex(request["owner_pk"]))
-        m1: bytes = bytes.fromhex(request["authentication_key_info"])
-        pk2: G1Element = G1Element.from_bytes(bytes.fromhex(request["plot_public_key"]))
-        m2: bytes = bytes.fromhex(request["payload_hash"])
-        pk3: G1Element = G1Element.from_bytes(bytes.fromhex(request["authentication_public_key"]))
-        
+        pk1: G1Element = G1Element.from_bytes(bytes.fromhex(request["plot_public_key"]))
+        pk2: G1Element = G1Element.from_bytes(bytes.fromhex(request["owner_pk"]))
+        m1: bytes = bytes.fromhex(request["payload_hash"])
         sig: bytes = bytes.fromhex(request["signature"])
 
         valid_sig = AugSchemeMPL.aggregate_verify(
-            [pk1, pk2, pk3], [m1, m2, m2], sig
+            [pk1, pk2], [m1, m1], sig
         )
 
         return {"valid": valid_sig}
