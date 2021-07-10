@@ -52,6 +52,7 @@ class FullNodeRpcApi:
             # Singletons
             "/get_singleton_state": self.get_singleton_state,
             "/get_p2_puzzle_hash_from_launcher_id": self.get_p2_puzzle_hash_from_launcher_id,
+            "/check_relative_lock_height": self.check_relative_lock_height,
             # Blspy Operations
             "/aggregate_verify_signature": self.aggregate_verify_signature,
             "/verify_signature": self.verify_signature,
@@ -240,19 +241,6 @@ class FullNodeRpcApi:
         else:
             return {"valid:": True, "quality_str": quality_str }
 
-    async def get_proof_quality_string(self, request: Dict):
-        plot_id = bytes.fromhex(request["plot_id"])
-        size = int(request["size"])
-        challenge = bytes.fromhex(request["challenge"])
-        proof = bytes.fromhex(request["proof"])
-
-        quality_str = Verifier().validate_proof(plot_id, size, challenge, proof)
-
-        if not quality_str:
-            return {"valid": False } 
-
-        return {"valid": True, "quality_str": quality_str.hex() }
-
     async def get_p2_puzzle_hash_from_launcher_id(self, request: Dict):
         launcher_Id = request["launcher_id"]
         seconds = request["seconds"]
@@ -260,6 +248,20 @@ class FullNodeRpcApi:
 
         p2_puzzle_hash = launcher_id_to_p2_puzzle_hash(launcher_Id, seconds, delayed_puzzle_hash)
         return {"p2_puzzle_hash": p2_puzzle_hash}
+
+    async def check_relative_lock_height(self, request: Dict):
+        coin_id = bytes.fromhex(request["coin_id"])      
+        relative_lock_height = int(request["relative_lock_height"])
+        coin_record = await self.service.blockchain.coin_store.get_coin_record(coin_id)
+
+        if (coin_record is None):
+            return {"valid": False}
+
+        peak: Optional[BlockRecord] = self.service.blockchain.get_peak()
+        peak_height = peak.height;
+        valid = peak_height - coin_record.confirmed_block_index > relative_lock_height
+
+        return {"valid": valid}
 
     async def get_delayed_puzzle_info_from_launcher_spend_request(self, request: Dict):
         coin_sol = CoinSolution.from_json_dict(request)
