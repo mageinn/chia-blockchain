@@ -242,10 +242,10 @@ class FullNodeRpcApi:
 
     async def get_p2_puzzle_hash_from_launcher_id(self, request: Dict):
         launcher_Id = bytes.fromhex(request["launcher_id"])
-        seconds = request["seconds"]
-        delayed_puzzle_hash = bytes.fromhex(request["delayed_puzzle_hash"])
+        delay_time = uint64(request["delay_time"])
+        delay_puzzle_hash = bytes.fromhex(request["delay_puzzle_hash"])
 
-        p2_puzzle_hash = launcher_id_to_p2_puzzle_hash(launcher_Id, seconds, delayed_puzzle_hash)
+        p2_puzzle_hash = launcher_id_to_p2_puzzle_hash(launcher_Id, delay_time, delay_puzzle_hash)
         return {"p2_puzzle_hash": p2_puzzle_hash}
 
     async def check_relative_lock_height(self, request: Dict):
