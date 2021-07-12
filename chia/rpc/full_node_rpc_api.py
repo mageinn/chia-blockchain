@@ -265,10 +265,18 @@ class FullNodeRpcApi:
     async def get_delayed_puzzle_info_from_launcher_id(self, request: Dict):
         launcher_id = bytes.fromhex(request["launcher_id"])
         coin_record = await self.service.blockchain.coin_store.get_coin_record(launcher_id)
+
+        if (coin_record is None):
+            return {"has_value": False}
+
         coin_sol = await self.get_coin_spend(coin_record);
+
+        if (coin_sol is None):
+            return {"has_value": False}
+
         seconds, delayed_puzzle_hash = get_delayed_puz_info_from_launcher_spend(coin_sol)
 
-        return {"seconds": seconds, "delayed_puzzle_hash": delayed_puzzle_hash}
+        return {"has_value":True, "seconds": seconds, "delayed_puzzle_hash": delayed_puzzle_hash}
             
     async def get_pool_state_from_coin_spend(self, request: Dict):
         coin_sol = CoinSolution.from_json_dict(request)
