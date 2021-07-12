@@ -1,5 +1,5 @@
 from typing import Any, Callable, Dict, List, Optional
-from blspy import AugSchemeMPL, G1Element
+from blspy import AugSchemeMPL, G1Element, G2Element
 from chiapos import Verifier
 
 from distutils.util import strtobool
@@ -60,7 +60,7 @@ class FullNodeRpcApi:
             # ChiaPos Operations
             "/get_proof_quality_string": self.get_proof_quality_string,
             # Pool Stuff
-            "/get_delayed_puz_info_from_launcher_spend": self.get_delayed_puzzle_info_from_launcher_spend_request,
+            "/get_delayed_puzzle_info_from_launcher_id": self.get_delayed_puzzle_info_from_launcher_id,
             "/get_pool_state_from_coin_spend": self.get_pool_state_from_coin_spend,
             # Coins
             "/get_coin_records_by_puzzle_hash": self.get_coin_records_by_puzzle_hash,
@@ -212,7 +212,7 @@ class FullNodeRpcApi:
         pk1: G1Element = G1Element.from_bytes(bytes.fromhex(request["plot_public_key"]))
         pk2: G1Element = G1Element.from_bytes(bytes.fromhex(request["owner_pk"]))
         m1: bytes = bytes.fromhex(request["payload_hash"])
-        sig: bytes = bytes.fromhex(request["signature"])
+        sig: G2Element = G2Element.from_bytes(bytes.fromhex(request["signature"]))
 
         valid_sig = AugSchemeMPL.aggregate_verify(
             [pk1, pk2], [m1, m1], sig
@@ -221,9 +221,9 @@ class FullNodeRpcApi:
         return {"valid": valid_sig}
 
     async def verify_signature(self, request: Dict):
-        ownerPk = bytes.fromhex(request["owner_pk"])
+        ownerPk = G1Element.from_bytes(bytes.fromhex(request["owner_pk"]))
         payloadHash = bytes.fromhex(request["payload_hash"])
-        signature = bytes.fromhex(request["signature"])
+        signature = G2Element.from_bytes(bytes.fromhex(request["signature"]))
 
         valid_sig = AugSchemeMPL.verify(ownerPk, payloadHash, signature)
 
@@ -262,8 +262,10 @@ class FullNodeRpcApi:
 
         return {"valid": valid}
 
-    async def get_delayed_puzzle_info_from_launcher_spend_request(self, request: Dict):
-        coin_sol = CoinSolution.from_json_dict(request)
+    async def get_delayed_puzzle_info_from_launcher_id(self, request: Dict):
+        launcher_id = bytes.fromhex(request["launcher_id"])
+        coin_record = await self.service.blockchain.coin_store.get_coin_record(launcher_id)
+        coin_sol = await self.get_coin_spend(coin_record);
         seconds, delayed_puzzle_hash = get_delayed_puz_info_from_launcher_spend(coin_sol)
 
         return {"seconds": seconds, "delayed_puzzle_hash": delayed_puzzle_hash}
