@@ -91,7 +91,7 @@ class FullNodeRpcApi:
         return []
     
     #Helper Method Area
-    async def get_coin_spend(coin_record: CoinRecord):
+    async def get_coin_spend(coin_record: CoinRecord) -> Optional[CoinSolution]:
         if coin_record is None or not coin_record.spent:
             return None
 
@@ -142,7 +142,7 @@ class FullNodeRpcApi:
                 return {"has_value": False}
 
             if not has_farmer_data:
-                launcher_coin = await self.service.blockchain.coin_store.get_coin_record(launcher_id)
+                launcher_coin: CoinRecord = await self.service.blockchain.coin_store.get_coin_record(launcher_id)
                 last_solution = await get_coin_spend(launcher_coin)
 
                 if last_solution is None:
@@ -191,7 +191,7 @@ class FullNodeRpcApi:
                         return {"has_value": False}
                     break
 
-                last_solution: Optional[CoinSolution] = await get_coin_spend(node_rpc_client, next_coin_record)
+                last_solution: Optional[CoinSolution] = await get_coin_spend(next_coin_record)
                 assert last_solution is not None
 
                 pool_state: Optional[PoolState] = solution_to_extra_data(last_solution)
