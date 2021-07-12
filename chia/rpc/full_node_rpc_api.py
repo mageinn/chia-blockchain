@@ -230,7 +230,7 @@ class FullNodeRpcApi:
         return {"valid": valid_sig}
 
     async def get_proof_quality_string(self, request: Dict):
-        plotId = bytes.fromhex(request["plot_id"])
+        plot_id = bytes.fromhex(request["plot_id"])
         size = int(request["size"])
         challenge = bytes.fromhex(request["challenge"])
         proof = bytes.fromhex(request["proof"])
