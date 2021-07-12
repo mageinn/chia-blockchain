@@ -91,7 +91,7 @@ class FullNodeRpcApi:
         return []
     
     #Helper Method Area
-    async def get_coin_spend(coin_record: CoinRecord) -> Optional[CoinSolution]:
+    async def get_coin_spend(self, coin_record: CoinRecord) -> Optional[CoinSolution]:
         if coin_record is None or not coin_record.spent:
             return None
 
@@ -104,7 +104,7 @@ class FullNodeRpcApi:
         block_generator: Optional[BlockGenerator] = await self.service.blockchain.get_block_generator(block)
         assert block_generator is not None
         error, puzzle, solution = get_puzzle_and_solution_for_coin(
-            block_generator, coin_name, self.service.constants.MAX_BLOCK_COST_CLVM
+            block_generator, coin_record.coin.name(), self.service.constants.MAX_BLOCK_COST_CLVM
         )
         if error is not None:
             return None
@@ -114,6 +114,7 @@ class FullNodeRpcApi:
         return CoinSolution(coin_record.coin, puzzle_ser, solution_ser)
 
     async def validate_puzzle_hash(
+        self,
         launcher_id: bytes32,
         delay_ph: bytes32,
         delay_time: uint64,
@@ -143,7 +144,7 @@ class FullNodeRpcApi:
 
             if not has_farmer_data:
                 launcher_coin: CoinRecord = await self.service.blockchain.coin_store.get_coin_record(launcher_id)
-                last_solution = await get_coin_spend(launcher_coin)
+                last_solution = await self.get_coin_spend(launcher_coin)
 
                 if last_solution is None:
                     return {"has_value": False}
@@ -176,11 +177,11 @@ class FullNodeRpcApi:
                 if next_coin is None:
                     return {"has_value": False}
 
-                next_coin_record: Optional[CoinRecord] = await node_rpc_client.get_coin_record_by_name(next_coin.name())
+                next_coin_record: Optional[CoinRecord] = await self.service.blockchain.coin_store.get_coin_record(next_coin.name())
                 assert next_coin_record is not None
 
                 if not next_coin_record.spent:
-                    if not validate_puzzle_hash(
+                    if not self.validate_puzzle_hash(
                         launcher_id,
                         delay_puzzle_hash,
                         delay_time,
@@ -191,7 +192,7 @@ class FullNodeRpcApi:
                         return {"has_value": False}
                     break
 
-                last_solution: Optional[CoinSolution] = await get_coin_spend(next_coin_record)
+                last_solution: Optional[CoinSolution] = await self.get_coin_spend(next_coin_record)
                 assert last_solution is not None
 
                 pool_state: Optional[PoolState] = solution_to_extra_data(last_solution)
