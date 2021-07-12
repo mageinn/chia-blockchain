@@ -241,9 +241,9 @@ class FullNodeRpcApi:
             return {"valid:": True, "quality_str": quality_str }
 
     async def get_p2_puzzle_hash_from_launcher_id(self, request: Dict):
-        launcher_Id = request["launcher_id"]
+        launcher_Id = bytes.fromhex(request["launcher_id"])
         seconds = request["seconds"]
-        delayed_puzzle_hash = request["delayed_puzzle_hash"]
+        delayed_puzzle_hash = bytes.fromhex(request["delayed_puzzle_hash"])
 
         p2_puzzle_hash = launcher_id_to_p2_puzzle_hash(launcher_Id, seconds, delayed_puzzle_hash)
         return {"p2_puzzle_hash": p2_puzzle_hash}
