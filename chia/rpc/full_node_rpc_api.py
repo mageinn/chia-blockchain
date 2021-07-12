@@ -2,6 +2,7 @@ from typing import Any, Callable, Dict, List, Optional
 from blspy import AugSchemeMPL, G1Element
 from chiapos import Verifier
 
+from distutils.util import strtobool
 from chia.consensus.block_record import BlockRecord
 from chia.consensus.pos_quality import UI_ACTUAL_SPACE_CONSTANT_FACTOR
 from chia.full_node.full_node import FullNode
@@ -132,7 +133,7 @@ class FullNodeRpcApi:
             confirmation_security_threshold = int(request["confirmation_security_threshold"])
             genesis_challenge = self.service.constants.GENESIS_CHALLENGE
 
-            has_farmer_data = bool(request["has_farmer_data"])
+            has_farmer_data = strtobool(request["has_farmer_data"])
 
             peak: Optional[BlockRecord] = self.service.blockchain.get_peak()
             peak_height = peak.height;
