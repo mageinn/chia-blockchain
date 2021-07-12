@@ -143,7 +143,7 @@ class FullNodeRpcApi:
 
             if not has_farmer_data:
                 launcher_coin = await self.service.blockchain.coin_store.get_coin_record(launcher_id)
-                last_solution: await get_coin_spend(launcher_coin)
+                last_solution = await get_coin_spend(launcher_coin)
 
                 if last_solution is None:
                     return {"has_value": False}
