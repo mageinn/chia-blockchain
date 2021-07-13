@@ -238,7 +238,7 @@ class FullNodeRpcApi:
         if (quality_str is None):
             return {"valid": False }
         else:
-            return {"valid:": True, "quality_str": quality_str }
+            return {"valid": True, "quality_str": quality_str}
 
     async def get_p2_puzzle_hash_from_launcher_id(self, request: Dict):
         launcher_Id = bytes.fromhex(request["launcher_id"])
