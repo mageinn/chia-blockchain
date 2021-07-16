@@ -62,6 +62,7 @@ class FullNodeRpcApi:
             # Pool Stuff
             "/get_delayed_puzzle_info_from_launcher_id": self.get_delayed_puzzle_info_from_launcher_id,
             "/get_pool_state_from_coin_spend": self.get_pool_state_from_coin_spend,
+            "/validate_signage_point_or_eos": self.validate_signage_point_or_eos,
             # Coins
             "/get_coin_records_by_puzzle_hash": self.get_coin_records_by_puzzle_hash,
             "/get_coin_records_by_puzzle_hashes": self.get_coin_records_by_puzzle_hashes,
@@ -257,7 +258,7 @@ class FullNodeRpcApi:
             return {"valid": False}
 
         peak: Optional[BlockRecord] = self.service.blockchain.get_peak()
-        peak_height = peak.height;
+        peak_height = peak.height
         valid = peak_height - coin_record.confirmed_block_index > relative_lock_height
 
         return {"valid": valid}
@@ -285,8 +286,9 @@ class FullNodeRpcApi:
         
         return {"has_value":has_value, "pool_state":pool_state}
 
+    async def validate_signage_point_or_eos(self, request: Dict):
 
-
+        return {"valid": True}
 
     async def get_initial_freeze_period(self, _: Dict):
         freeze_period = self.service.constants.INITIAL_FREEZE_END_TIMESTAMP
