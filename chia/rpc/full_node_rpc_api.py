@@ -298,13 +298,17 @@ class FullNodeRpcApi:
             return {"valid": True}
 
         # Otherwise we can backtrack from peak to find it in the blockchain
-        hint_b_hash = self.service.blockchain.height_to_hash(hint_height)
-        next_b: Optional[BlockRecord] = self.service.blockchain.get_block_record_from_db(hint_b_hash)
+        hint_b_hash: Optional[bytes32] = self.service.blockchain.height_to_hash(hint_height)
+
+        if (hint_b_hash is None):
+            return {"valid": False} #This should never happen because of the processing delay but you never know
+
+        next_b: Optional[BlockRecord] = self.service.blockchain.try_block_record(hint_b_hash)
 
         if (next_b is None):
             return {"valid": False} #This should never happen because of the processing delay but you never know
 
-        curr_b: Optional[BlockRecord] = self.service.blockchain.get_block_record(next_b.prev_hash)
+        curr_b: Optional[BlockRecord] = self.service.blockchain.try_block_record(next_b.prev_hash)
         if (curr_b is None):
             return {"valid": False} #This should never happen because of the processing delay but you never know
 
