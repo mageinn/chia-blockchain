@@ -303,15 +303,18 @@ class FullNodeRpcApi:
         hint_b_hash: Optional[bytes32] = self.service.blockchain.height_to_hash(hint_height)
 
         if (hint_b_hash is None):
+            self.service.log.warning("hint_b_hash is None")
             return {"valid": False} #This should never happen because of the processing delay but you never know
 
         next_b: Optional[BlockRecord] = self.service.blockchain.try_block_record(hint_b_hash)
 
         if (next_b is None):
+            self.service.log.warning("next_b is None")
             return {"valid": False} #This should never happen because of the processing delay but you never know
 
         curr_b: Optional[BlockRecord] = self.service.blockchain.try_block_record(next_b.prev_hash)
         if (curr_b is None):
+            self.service.log.warning("curr_b is None")
             return {"valid": False} #This should never happen because of the processing delay but you never know
 
         for _ in range(search_range):
@@ -320,6 +323,8 @@ class FullNodeRpcApi:
 
                 next_b_total_iters = next_b.total_iters #Total Iters when fully infused
 
+                self.service.log.warning("cc_iters " + str(cc_iters) +  " next_b_total_iters " + str(next_b_total_iters) + " sp_total_iters " + str(sp_total_iters))
+
                 return {"valid": next_b_total_iters >= sp_total_iters}
                 
             if curr_b.finished_reward_slot_hashes is not None:
@@ -327,9 +332,9 @@ class FullNodeRpcApi:
                 for eos_rc in curr_b.finished_reward_slot_hashes:
                     if eos_rc == rc_challenge:
                         sp_total_iters = calculate_sp_iters(self.service.constants, next_b.sub_slot_iters, next_b.signage_point_index + 1)
-                        next_b_total_iters = next_b.ip_sub_slot_total_iters(self.service.constants) + next_b.ip_iters(
-                            self.service.constants
-                        )
+                        next_b_total_iters = next_b.total_iters
+
+                        self.service.log.warning("cc_iters " + str(cc_iters) +  " next_b_total_iters " + str(next_b_total_iters) + " sp_total_iters " + str(sp_total_iters))
 
                         return {"valid": next_b_total_iters >= sp_total_iters}
 
@@ -339,6 +344,7 @@ class FullNodeRpcApi:
                 break
             curr_b = curr_b_optional
 
+        self.service.log.warning("end of range or start of chain")
         return {"valid": False}
 
     async def get_initial_freeze_period(self, _: Dict):
