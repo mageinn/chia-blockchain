@@ -128,34 +128,36 @@ class FullNodeRpcApi:
         new_full_puzzle: Program = create_full_puzzle(inner_puzzle, launcher_id)
         return new_full_puzzle.get_tree_hash() == outer_puzzle_hash
 
-    #Helper Method Area End
-
-    async def get_singleton_state(self, request: Dict):
+    async def try_get_singleton_state(self, launcher_id, confirmation_security_threshold, has_farmer_data,   #bured solution, buried state, tip state
+                                   singleton_tip, singleton_tip_state, delay_time, delay_puzzle_hash) -> Optional[Tuple[CoinSolution,PoolState,PoolState]]:
         try:
-            launcher_id = bytes.fromhex(request["launcher_id"])
-            confirmation_security_threshold = int(request["confirmation_security_threshold"])
             genesis_challenge = self.service.constants.GENESIS_CHALLENGE
 
-            has_farmer_data = strtobool(request["has_farmer_data"])
-
             peak: Optional[BlockRecord] = self.service.blockchain.get_peak()
+
+            if peak is None:
+                return None
+
             peak_height = peak.height;
 
-            if peak is None or peak_height == 0:
-                return {"has_value": False}
+            if peak_height == 0:
+                return None
 
             if not has_farmer_data:
-                launcher_coin: CoinRecord = await self.service.blockchain.coin_store.get_coin_record(launcher_id)
+                launcher_coin: Optional[CoinRecord] = await self.service.blockchain.coin_store.get_coin_record(launcher_id)
+                if launcher_coin is None:
+                    return None
+
                 last_solution = await self.get_coin_spend(launcher_coin)
 
                 if last_solution is None:
-                    return {"has_value": False}
+                    return None
 
                 delay_time, delay_puzzle_hash = get_delayed_puz_info_from_launcher_spend(last_solution)
                 saved_state = solution_to_extra_data(last_solution)
 
                 if saved_state is None:
-                    return {"has_value": False}
+                    return None
             else:
                 last_solution = CoinSolution.from_json_dict(request["singleton_tip"])
                 saved_state = PoolState.from_json_dict(request["singleton_tip_state"])
@@ -177,10 +179,12 @@ class FullNodeRpcApi:
                 next_coin: Optional[Coin] = get_most_recent_singleton_coin_from_coin_solution(last_solution)
 
                 if next_coin is None:
-                    return {"has_value": False}
+                    return None
 
                 next_coin_record: Optional[CoinRecord] = await self.service.blockchain.coin_store.get_coin_record(next_coin.name())
-                assert next_coin_record is not None
+                
+                if next_coin_record is None:
+                    return None
 
                 if not next_coin_record.spent:
                     if not self.validate_puzzle_hash(
@@ -191,11 +195,13 @@ class FullNodeRpcApi:
                         next_coin_record.coin.puzzle_hash,
                         genesis_challenge,
                     ):
-                        return {"has_value": False}
+                        return None
                     break
 
                 last_solution: Optional[CoinSolution] = await self.get_coin_spend(next_coin_record)
-                assert last_solution is not None
+                
+                if last_solution is None:
+                    return None
 
                 pool_state: Optional[PoolState] = solution_to_extra_data(last_solution)
 
@@ -206,10 +212,41 @@ class FullNodeRpcApi:
                     saved_solution = last_solution
                     saved_state = last_not_none_state
 
-            return {"has_value":True, "singleton_state":{"buried_singleton_tip":saved_solution, "buried_singleton_tip_state":saved_state,"singleton_tip_state":last_not_none_state}}
+            return saved_solution, saved_state, last_not_none_state
         except Exception as e:
-            return {"has_value": False} 
+            self.service.log.exception("Exception while getting singleton state")
+            return None
+
+    #Helper Method Area End
+
+    async def get_singleton_state(self, request: Dict):
+        launcher_id = bytes.fromhex(request["launcher_id"])
+        confirmation_security_threshold = int(request["confirmation_security_threshold"])
+        genesis_challenge = self.service.constants.GENESIS_CHALLENGE
+        has_farmer_data = strtobool(request["has_farmer_data"])
+
+        if has_farmer_data:
+            last_solution = CoinSolution.from_json_dict(request["singleton_tip"])
+            saved_state = PoolState.from_json_dict(request["singleton_tip_state"])
+            delay_time = int(request["delay_time"])
+            delay_puzzle_hash = bytes.fromhex(request["delay_puzzle_hash"])
+        else:
+            last_solution = None
+            saved_state = None
+            delay_time = None
+            delay_puzzle_hash = None
+
+
+        singleton_state_tuple = await self.try_get_singleton_state(launcher_id, confirmation_security_threshold, has_farmer_data, 
+                                                                   last_solution, saved_state, delay_time, delay_puzzle_hash)
         
+        if singleton_state_tuple is None:
+            return {"has_value":False}
+
+        saved_solution, saved_state, tip_state = singleton_state_tuple
+
+        return {"has_value":True, "singleton_state":{"buried_singleton_tip":saved_solution, "buried_singleton_tip_state":saved_state,"singleton_tip_state":tip_state}}
+
     async def aggregate_verify_signature(self, request: Dict):
         pk1: G1Element = G1Element.from_bytes(bytes.fromhex(request["plot_public_key"]))
         pk2: G1Element = G1Element.from_bytes(bytes.fromhex(request["owner_pk"]))
