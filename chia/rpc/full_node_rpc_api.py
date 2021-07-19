@@ -7,6 +7,7 @@ from chia.consensus.block_record import BlockRecord
 from chia.consensus.pos_quality import UI_ACTUAL_SPACE_CONSTANT_FACTOR
 from chia.full_node.full_node import FullNode
 from chia.full_node.mempool_check_conditions import get_puzzle_and_solution_for_coin
+from chia.consensus.pot_iterations import calculate_ip_iters, calculate_sp_iters
 from chia.types.blockchain_format.program import Program, SerializedProgram
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.coin_record import CoinRecord
@@ -62,7 +63,7 @@ class FullNodeRpcApi:
             # Pool Stuff
             "/get_delayed_puzzle_info_from_launcher_id": self.get_delayed_puzzle_info_from_launcher_id,
             "/get_pool_state_from_coin_spend": self.get_pool_state_from_coin_spend,
-            "/validate_signage_point_or_eos": self.validate_signage_point_or_eos,
+            "/confirm_signage_point_or_eos": self.confirm_signage_point_or_eos,
             # Coins
             "/get_coin_records_by_puzzle_hash": self.get_coin_records_by_puzzle_hash,
             "/get_coin_records_by_puzzle_hashes": self.get_coin_records_by_puzzle_hashes,
@@ -286,12 +287,13 @@ class FullNodeRpcApi:
         
         return {"has_value":has_value, "pool_state":pool_state}
 
-    async def validate_signage_point_or_eos(self, request: Dict):
+    async def confirm_signage_point_or_eos(self, request: Dict):
         search_range = 100
 
         sp_hash: bytes32 = hexstr_to_bytes(request["sp_hash"])
         hint_height: int = int(request["hint_height"])
         rc_challenge: bytes32 = hexstr_to_bytes(request["rc_challenge"])
+        cc_iters: int = int(request["cc_iters"])
 
         # If it's still in the full node store, it's not reverted
         if self.service.full_node_store.get_signage_point(sp_hash):
@@ -313,23 +315,23 @@ class FullNodeRpcApi:
             return {"valid": False} #This should never happen because of the processing delay but you never know
 
         for _ in range(search_range):
-            sp_total_iters = sp.cc_vdf.number_of_iterations + curr_b.ip_sub_slot_total_iters(self.service.constants)
+            sp_total_iters = cc_iters + curr_b.ip_sub_slot_total_iters(self.service.constants) #Total iters at start of SP
             if curr_b.reward_infusion_new_challenge == rc_challenge:
-                next_b_total_iters = next_b.ip_sub_slot_total_iters(self.service.constants) + next_b.ip_iters( #Iters when fully infused
-                    self.service.constants
-                )
 
-                return {"valid": sp_total_iters > next_b_total_iters}
+                next_b_total_iters = next_b.total_iters #Total Iters when fully infused
+
+                return {"valid": next_b_total_iters >= sp_total_iters}
                 
             if curr_b.finished_reward_slot_hashes is not None:
                 assert curr_b.finished_challenge_slot_hashes is not None
                 for eos_rc in curr_b.finished_reward_slot_hashes:
                     if eos_rc == rc_challenge:
+                        sp_total_iters = calculate_sp_iters(self.service.constants, next_b.sub_slot_iters, next_b.signage_point_index + 1)
                         next_b_total_iters = next_b.ip_sub_slot_total_iters(self.service.constants) + next_b.ip_iters(
                             self.service.constants
                         )
 
-                        return {"valid": sp_total_iters > next_b_total_iters}
+                        return {"valid": next_b_total_iters >= sp_total_iters}
 
             next_b = curr_b
             curr_b_optional = self.service.blockchain.try_block_record(curr_b.prev_hash)
