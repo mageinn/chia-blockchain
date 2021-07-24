@@ -158,17 +158,20 @@ class FullNodeRpcApi:
 
                 if saved_state is None:
                     return None
+            else:
+                assert last_solution is not None
+                assert saved_state is not None
+                assert delay_time is not None
+                assert delay_puzzle_hash is not None
+
+                launcher_coin: Optional[CoinRecord] = await self.service.blockchain.coin_store.get_coin_record(last_solution.coin.name())
+                if launcher_coin is None:
+                    return None
 
             saved_solution = last_solution
             last_not_none_state: PoolState = saved_state
+ 
             assert last_solution is not None
-
-            if launcher_coin is None:
-                last_coin_record: Optional[CoinRecord] =  await self.service.blockchain.coin_store.get_coin_record(last_solution.coin.name())
-            else:
-                last_coin_record: Optional[CoinRecord] = launcher_coin
-
-            assert last_coin_record is not None
         
             while True:
                 next_coin: Optional[Coin] = get_most_recent_singleton_coin_from_coin_solution(last_solution)
