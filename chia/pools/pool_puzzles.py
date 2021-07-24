@@ -11,6 +11,7 @@ from chia.pools.pool_wallet_info import PoolState, LEAVING_POOL, SELF_POOLING
 from chia.types.blockchain_format.coin import Coin
 from chia.types.blockchain_format.program import Program, SerializedProgram
 
+from chia.util.ints import uint8, uint32, uint64, uint128
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.coin_solution import CoinSolution
 from chia.wallet.puzzles.load_clvm import load_clvm
