@@ -330,6 +330,13 @@ class FullNodeRpcApi:
         rc_challenge: bytes32 = hexstr_to_bytes(request["rc_challenge"])
         cc_iters: int = int(request["cc_iters"])
 
+        peak = self.service.blockchain.get_peak()
+
+        assert peak is not None
+
+        if (hint_height > peak.height):
+            hint_height = peak.height
+
         # If it's still in the full node store, it's not reverted
         if self.service.full_node_store.get_signage_point(sp_hash):
             return {"valid": True}
