@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from blspy import AugSchemeMPL, G1Element, G2Element
 from chiapos import Verifier
 

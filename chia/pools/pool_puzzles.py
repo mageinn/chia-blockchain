@@ -215,18 +215,21 @@ def create_travel_spend(
         inner_puzzle,
     )
 
-
-def create_absorb_spend(
+def create_absorb_spend_from_data(
     last_coin_solution: CoinSolution,
-    current_state: PoolState,
+    target_puzzle_hash: bytes32, 
+    relative_lock_height: uint32, 
+    owner_pubkey: G1Element, 
+    singleton_state: uint8,
     launcher_coin: Coin,
     height: uint32,
     genesis_challenge: bytes32,
     delay_time: uint64,
     delay_ph: bytes32,
 ) -> List[CoinSolution]:
-    inner_puzzle: Program = pool_state_to_inner_puzzle(
-        current_state, launcher_coin.name(), genesis_challenge, delay_time, delay_ph
+    inner_puzzle: Program = pool_state_data_to_inner_puzzle(
+        target_puzzle_hash, relative_lock_height, owner_pubkey, singleton_state,
+        launcher_coin.name(), genesis_challenge, delay_time, delay_ph
     )
     reward_amount: uint64 = calculate_pool_reward(height)
     if is_pool_member_inner_puzzle(inner_puzzle):
@@ -280,6 +283,18 @@ def create_absorb_spend(
     ]
     return coin_solutions
 
+def create_absorb_spend(
+    last_coin_solution: CoinSolution,
+    current_state: PoolState,
+    launcher_coin: Coin,
+    height: uint32,
+    genesis_challenge: bytes32,
+    delay_time: uint64,
+    delay_ph: bytes32,
+) -> List[CoinSolution]:
+    return create_absorb_spend_from_data(last_coin_solution, 
+                                         current_state.target_puzzle_hash, current_state.relative_lock_height, current_state.owner_pubkey, current_state.state,
+                                         launcher_coin, height, genesis_challenge, delay_time, delay_ph)
 
 def get_most_recent_singleton_coin_from_coin_solution(coin_sol: CoinSolution) -> Optional[Coin]:
     additions: List[Coin] = coin_sol.additions()
@@ -407,22 +422,29 @@ def solution_to_extra_data(full_spend: CoinSolution) -> Optional[PoolState]:
 def pool_state_to_inner_puzzle(
     pool_state: PoolState, launcher_id: bytes32, genesis_challenge: bytes32, delay_time: uint64, delay_ph: bytes32
 ) -> Program:
+    return pool_state_data_to_inner_puzzle(pool_state.target_puzzle_hash, pool_state.relative_lock_height, pool_state.owner_pubkey, pool_state.state,
+                                           launcher_id, genesis_challenge, delay_time, delay_ph)
+
+def pool_state_data_to_inner_puzzle(
+    target_puzzle_hash: bytes32, relative_lock_height: uint32, owner_pubkey: G1Element, singleton_state: uint8,
+    launcher_id: bytes32, genesis_challenge: bytes32, delay_time: uint64, delay_ph: bytes32
+    ) -> Program:
     escaping_inner_puzzle: Program = create_waiting_room_inner_puzzle(
-        pool_state.target_puzzle_hash,
-        pool_state.relative_lock_height,
-        pool_state.owner_pubkey,
+        target_puzzle_hash,
+        relative_lock_height,
+        owner_pubkey,
         launcher_id,
         genesis_challenge,
         delay_time,
         delay_ph,
     )
-    if pool_state.state in [LEAVING_POOL, SELF_POOLING]:
+    if singleton_state in [LEAVING_POOL, SELF_POOLING]:
         return escaping_inner_puzzle
     else:
         return create_pooling_inner_puzzle(
-            pool_state.target_puzzle_hash,
+            target_puzzle_hash,
             escaping_inner_puzzle.get_tree_hash(),
-            pool_state.owner_pubkey,
+            owner_pubkey,
             launcher_id,
             genesis_challenge,
             delay_time,
