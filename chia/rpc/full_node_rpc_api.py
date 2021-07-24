@@ -129,7 +129,7 @@ class FullNodeRpcApi:
         return new_full_puzzle.get_tree_hash() == outer_puzzle_hash
 
     async def try_get_singleton_state(self, launcher_id, confirmation_security_threshold, has_farmer_data,   #bured solution, buried state, tip state
-                                   singleton_tip, singleton_tip_state, delay_time, delay_puzzle_hash) -> Optional[Tuple[CoinSolution,PoolState,PoolState]]:
+                                   last_solution, saved_state, delay_time, delay_puzzle_hash) -> Optional[Tuple[CoinSolution,PoolState,PoolState]]:
         try:
             genesis_challenge = self.service.constants.GENESIS_CHALLENGE
 
@@ -158,11 +158,6 @@ class FullNodeRpcApi:
 
                 if saved_state is None:
                     return None
-            else:
-                last_solution = CoinSolution.from_json_dict(request["singleton_tip"])
-                saved_state = PoolState.from_json_dict(request["singleton_tip_state"])
-                delay_time = int(request["delay_time"])
-                delay_puzzle_hash = bytes.fromhex(request["delay_puzzle_hash"])
 
             saved_solution = last_solution
             last_not_none_state: PoolState = saved_state
