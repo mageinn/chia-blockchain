@@ -185,7 +185,7 @@ class FullNodeRpcApi:
                     return None
 
                 if not next_coin_record.spent:
-                    if not self.validate_puzzle_hash(
+                    if not await self.validate_puzzle_hash(
                         launcher_id,
                         delay_puzzle_hash,
                         delay_time,
