@@ -55,6 +55,7 @@ class FullNodeRpcApi:
             "/get_singleton_state": self.get_singleton_state,
             "/get_p2_puzzle_hash_from_launcher_id": self.get_p2_puzzle_hash_from_launcher_id,
             "/check_relative_lock_height": self.check_relative_lock_height,
+            "/absorb_singleton_rewards": self.absorb_singleton_rewards,
             # Blspy Operations
             "/aggregate_verify_signature": self.aggregate_verify_signature,
             "/verify_signature": self.verify_signature,
@@ -298,6 +299,7 @@ class FullNodeRpcApi:
         valid = peak_height - coin_record.confirmed_block_index > relative_lock_height
 
         return {"valid": valid}
+
 
     async def get_delayed_puzzle_info_from_launcher_id(self, request: Dict):
         launcher_id = bytes.fromhex(request["launcher_id"])
@@ -769,6 +771,8 @@ class FullNodeRpcApi:
 
         if "include_spent_coins" in request:
             kwargs["include_spent_coins"] = request["include_spent_coins"]
+        if "exclude_non_coinbase" in request:
+            kwargs["exclude_non_coinbase"] = request["exclude_non_coinbase"]
 
         coin_records = await self.service.blockchain.coin_store.get_coin_records_by_puzzle_hashes(**kwargs)
 
