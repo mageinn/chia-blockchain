@@ -225,7 +225,7 @@ class FullNodeRpcApi:
                     saved_solution = last_solution
                     saved_state = last_not_none_state
 
-            return saved_solution, saved_state, last_not_none_state
+            return saved_solution, last_solution, saved_state, last_not_none_state
         except Exception as e:
             self.service.log.exception("Exception while getting singleton state")
             return None
@@ -256,9 +256,9 @@ class FullNodeRpcApi:
         if singleton_state_tuple is None:
             return {"has_value":False}
 
-        saved_solution, saved_state, tip_state = singleton_state_tuple
+        saved_solution, tip_solution, saved_state, tip_state = singleton_state_tuple
 
-        return {"has_value":True, "singleton_state":{"buried_singleton_tip":saved_solution, "buried_singleton_tip_state":saved_state,"singleton_tip_state":tip_state}}
+        return {"has_value":True, "singleton_state":{"buried_singleton_tip":saved_solution, "singleton_tip":tip_solution, "buried_singleton_tip_state":saved_state, "singleton_tip_state":tip_state}}
 
     async def aggregate_verify_signature(self, request: Dict):
         pk1: G1Element = G1Element.from_bytes(bytes.fromhex(request["plot_public_key"]))
