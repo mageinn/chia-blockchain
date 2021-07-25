@@ -435,7 +435,6 @@ class FullNodeRpcApi:
                 assert curr_b.finished_challenge_slot_hashes is not None
                 for eos_rc in curr_b.finished_reward_slot_hashes:
                     if eos_rc == rc_challenge:
-                        sp_total_iters = calculate_sp_iters(self.service.constants, next_b.sub_slot_iters, next_b.signage_point_index + 1)
                         next_b_total_iters = next_b.total_iters
 
                         self.service.log.warning("cc_iters " + str(cc_iters) +  " next_b_total_iters " + str(next_b_total_iters) + " sp_total_iters " + str(sp_total_iters))
