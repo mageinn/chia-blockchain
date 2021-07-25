@@ -26,7 +26,9 @@ from chia.pools.pool_puzzles import (
     get_delayed_puz_info_from_launcher_spend,
     pool_state_to_inner_puzzle,
     create_full_puzzle,
-    get_most_recent_singleton_coin_from_coin_solution
+    get_most_recent_singleton_coin_from_coin_solution,
+    create_absorb_spend,
+    create_full_puzzle
 )
 from chia.pools.pool_wallet_info import PoolState
 
@@ -55,7 +57,7 @@ class FullNodeRpcApi:
             "/get_singleton_state": self.get_singleton_state,
             "/get_p2_puzzle_hash_from_launcher_id": self.get_p2_puzzle_hash_from_launcher_id,
             "/check_relative_lock_height": self.check_relative_lock_height,
-            "/absorb_singleton_rewards": self.absorb_singleton_rewards,
+            "/absorb_singleton_reward": self.absorb_singleton_reward,
             # Blspy Operations
             "/aggregate_verify_signature": self.aggregate_verify_signature,
             "/verify_signature": self.verify_signature,
@@ -94,6 +96,18 @@ class FullNodeRpcApi:
         return []
     
     #Helper Method Area
+    def get_farmed_height(parent_coin_info: bytes32, confirmed_block_index: uint32) -> Optional[uint32]:
+        # Returns the height farmed if it's a coinbase reward, otherwise None
+        for block_index in range(
+            confirmed_block_index, confirmed_block_index - 128, -1
+        ):
+            if block_index < 0:
+                break
+            pool_parent = pool_parent_id(uint32(block_index), genesis_challenge)
+            if pool_parent == parent_coin_info:
+                return uint32(block_index)
+        return None
+
     async def get_coin_spend(self, coin_record: CoinRecord) -> Optional[CoinSolution]:
         if coin_record is None or not coin_record.spent:
             return None
@@ -300,6 +314,52 @@ class FullNodeRpcApi:
 
         return {"valid": valid}
 
+    async def absorb_singleton_reward(self, request: Dict):
+        launcher_id = bytes.fromhex(request["launcher_id"])
+        singleton_tip = CoinSolution.from_json_dict(request["singleton_tip"])
+        poolstate_tip = PoolState.from_json_dict(request["poolstate_tip"])
+
+        reward_confirmed_height = int(request["reward_confirmed_height"])
+        reward_coin_parent_info = bytes.fromhex(request["reward_coin_parent_info"])
+
+        assert launcher_id is not None
+        assert singleton_tip is not None
+        assert poolstate_tip is not None
+
+        launcher_coin_record = self.service.blockchain.coin_store.get_coin_record(launcher_id)
+
+        assert launcher_coin_record is not None
+
+        delay_time, delay_ph = get_delayed_puz_info_from_launcher_spend(singleton_tip)
+
+        farmed_height = get_farmed_height()
+
+        absorb_spend: List[CoinSpend] = create_absorb_spend(
+            singleton_tip,
+            poolstate_tip,
+            launcher_coin_record,
+            farmed_height,
+            self.service.constants.GENESIS_CHALLENGE,
+            delay_time,
+            delay_ph)
+
+        assert absorb_spend is not None
+
+        bundle = SpendBundle(absorb_spend, G2Element())
+        bundle_name = bundle.name()
+
+        if self.service.mempool_manager.get_spendbundle(bundle_name) is not None:
+            status = MempoolInclusionStatus.SUCCESS
+            error = None
+        else:
+            status, error = await self.service.respond_transaction(bundle, bundle_name)
+            if status != MempoolInclusionStatus.SUCCESS:
+                if self.service.mempool_manager.get_spendbundle(bundle_name) is not None:
+                    # Already in mempool
+                    status = MempoolInclusionStatus.SUCCESS
+                    error = None
+
+        return {"status":status,"error":error}
 
     async def get_delayed_puzzle_info_from_launcher_id(self, request: Dict):
         launcher_id = bytes.fromhex(request["launcher_id"])
