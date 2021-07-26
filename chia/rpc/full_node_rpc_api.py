@@ -332,7 +332,7 @@ class FullNodeRpcApi:
 
         delay_time, delay_ph = get_delayed_puz_info_from_launcher_spend(singleton_tip)
 
-        farmed_height = get_farmed_height()
+        farmed_height = get_farmed_height(reward_coin_parent_info, reward_confirmed_height)
 
         absorb_spend: List[CoinSpend] = create_absorb_spend(
             singleton_tip,
