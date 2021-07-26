@@ -8,6 +8,7 @@ from chia.consensus.pos_quality import UI_ACTUAL_SPACE_CONSTANT_FACTOR
 from chia.full_node.full_node import FullNode
 from chia.full_node.mempool_check_conditions import get_puzzle_and_solution_for_coin
 from chia.consensus.pot_iterations import calculate_ip_iters, calculate_sp_iters
+from chia.consensus.coinbase import pool_parent_id
 from chia.types.blockchain_format.program import Program, SerializedProgram
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.coin_record import CoinRecord
@@ -103,7 +104,7 @@ class FullNodeRpcApi:
         ):
             if block_index < 0:
                 break
-            pool_parent = pool_parent_id(uint32(block_index), genesis_challenge)
+            pool_parent = pool_parent_id(uint32(block_index), self.service.constants.GENESIS_CHALLENGE)
             if pool_parent == parent_coin_info:
                 return uint32(block_index)
         return None
@@ -341,7 +342,7 @@ class FullNodeRpcApi:
         absorb_spend: List[CoinSpend] = create_absorb_spend(
             singleton_tip,
             poolstate_tip,
-            launcher_coin_record,
+            launcher_coin_record.coin,
             farmed_height,
             self.service.constants.GENESIS_CHALLENGE,
             delay_time,
@@ -363,7 +364,10 @@ class FullNodeRpcApi:
                     status = MempoolInclusionStatus.SUCCESS
                     error = None
 
-        return {"status":status,"error":error}
+        if (error is None):
+            return {"status":status}
+        
+        return {"status":status,"error":error.value}
 
     async def get_delayed_puzzle_info_from_launcher_id(self, request: Dict):
         launcher_id = bytes.fromhex(request["launcher_id"])
