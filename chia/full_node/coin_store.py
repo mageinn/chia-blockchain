@@ -152,7 +152,7 @@ class CoinStore:
         coins = set()
         cursor = await self.coin_record_db.execute(
             f"SELECT * from coin_record WHERE puzzle_hash=? AND confirmed_index>=? AND confirmed_index<? "
-            f"{'' if include_spent_coins else 'AND spent=0'}",
+            f"{'' if include_spent_coins else 'AND +spent=0'}",
             (puzzle_hash.hex(), start_height, end_height),
         )
         rows = await cursor.fetchall()
@@ -179,7 +179,7 @@ class CoinStore:
         cursor = await self.coin_record_db.execute(
             f'SELECT * from coin_record WHERE puzzle_hash in ({"?," * (len(puzzle_hashes_db) - 1)}?) '
             f"AND confirmed_index>=? AND confirmed_index<? "
-            f"{'' if include_spent_coins else 'AND spent=0 '}"
+            f"{'' if include_spent_coins else 'AND +spent=0 '}"
             f"{'AND coinbase=1' if exclude_non_coinbase else ''}",
             puzzle_hashes_db + (start_height, end_height),
         )
