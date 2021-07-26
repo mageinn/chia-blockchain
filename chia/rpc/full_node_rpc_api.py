@@ -330,7 +330,7 @@ class FullNodeRpcApi:
 
         assert launcher_coin_record is not None
 
-        singleton_spend = self.get_coin_spend(launcher_coin_record)
+        singleton_spend = await self.get_coin_spend(launcher_coin_record)
 
         assert singleton_spend is not None
 
