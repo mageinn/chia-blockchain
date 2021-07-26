@@ -326,11 +326,15 @@ class FullNodeRpcApi:
         assert singleton_tip is not None
         assert poolstate_tip is not None
 
-        launcher_coin_record = self.service.blockchain.coin_store.get_coin_record(launcher_id)
+        launcher_coin_record = await self.service.blockchain.coin_store.get_coin_record(launcher_id)
 
         assert launcher_coin_record is not None
 
-        delay_time, delay_ph = get_delayed_puz_info_from_launcher_spend(singleton_tip)
+        singleton_spend = self.get_coin_spend(launcher_coin_record)
+
+        assert singleton_spend is not None
+
+        delay_time, delay_ph = get_delayed_puz_info_from_launcher_spend(singleton_spend)
 
         farmed_height = get_farmed_height(reward_coin_parent_info, reward_confirmed_height)
 
