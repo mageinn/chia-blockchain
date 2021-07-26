@@ -815,7 +815,7 @@ class FullNodeRpcApi:
             kwargs["end_height"] = uint32(request["end_height"])
 
         if "include_spent_coins" in request:
-            kwargs["include_spent_coins"] = request["include_spent_coins"]
+            kwargs["include_spent_coins"] = strtobool(request["include_spent_coins"])
 
         coin_records = await self.service.blockchain.coin_store.get_coin_records_by_puzzle_hash(**kwargs)
 
@@ -837,9 +837,9 @@ class FullNodeRpcApi:
             kwargs["end_height"] = uint32(request["end_height"])
 
         if "include_spent_coins" in request:
-            kwargs["include_spent_coins"] = request["include_spent_coins"]
+            kwargs["include_spent_coins"] = strtobool(request["include_spent_coins"])
         if "exclude_non_coinbase" in request:
-            kwargs["exclude_non_coinbase"] = request["exclude_non_coinbase"]
+            kwargs["exclude_non_coinbase"] = strtobool(request["exclude_non_coinbase"])
 
         coin_records = await self.service.blockchain.coin_store.get_coin_records_by_puzzle_hashes(**kwargs)
 
