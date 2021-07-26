@@ -53,6 +53,8 @@ class CoinStore:
 
         await self.coin_record_db.execute("CREATE INDEX IF NOT EXISTS coin_spent_index on coin_record(spent_index)")
 
+        await self.coin_record_db.execute("CREATE INDEX IF NOT EXISTS coin_spent on coin_record(spent)")
+        
         await self.coin_record_db.execute("CREATE INDEX IF NOT EXISTS coin_puzzle_hash on coin_record(puzzle_hash)")
 
         await self.coin_record_db.commit()
@@ -146,13 +148,13 @@ class CoinStore:
         include_spent_coins: bool,
         puzzle_hash: bytes32,
         start_height: uint32 = uint32(0),
-        end_height: uint32 = uint32((2 ** 32) - 1)
+        end_height: uint32 = uint32((2 ** 32) - 1),
     ) -> List[CoinRecord]:
 
         coins = set()
         cursor = await self.coin_record_db.execute(
-            f"SELECT * from coin_record WHERE puzzle_hash=? AND confirmed_index>=? AND confirmed_index<? "
-            f"{'' if include_spent_coins else 'AND +spent=0'}",
+            f"SELECT * from coin_record INDEXED BY coin_puzzle_hash WHERE puzzle_hash=? AND confirmed_index>=? AND confirmed_index<? "
+            f"{'' if include_spent_coins else 'AND spent=0'}",
             (puzzle_hash.hex(), start_height, end_height),
         )
         rows = await cursor.fetchall()
@@ -169,7 +171,6 @@ class CoinStore:
         puzzle_hashes: List[bytes32],
         start_height: uint32 = uint32(0),
         end_height: uint32 = uint32((2 ** 32) - 1),
-        exclude_non_coinbase: bool = False
     ) -> List[CoinRecord]:
         if len(puzzle_hashes) == 0:
             return []
@@ -177,9 +178,9 @@ class CoinStore:
         coins = set()
         puzzle_hashes_db = tuple([ph.hex() for ph in puzzle_hashes])
         cursor = await self.coin_record_db.execute(
-            f'SELECT * from coin_record WHERE puzzle_hash in ({"?," * (len(puzzle_hashes_db) - 1)}?) '
+            f'SELECT * from coin_record INDEXED BY coin_puzzle_hash WHERE puzzle_hash in ({"?," * (len(puzzle_hashes_db) - 1)}?) '
             f"AND confirmed_index>=? AND confirmed_index<? "
-            f"{'' if include_spent_coins else 'AND +spent=0 '}"
+            f"{'' if include_spent_coins else 'AND spent=0 '}"
             f"{'AND coinbase=1' if exclude_non_coinbase else ''}",
             puzzle_hashes_db + (start_height, end_height),
         )
