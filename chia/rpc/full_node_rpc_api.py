@@ -96,7 +96,7 @@ class FullNodeRpcApi:
         return []
     
     #Helper Method Area
-    def get_farmed_height(parent_coin_info: bytes32, confirmed_block_index: uint32) -> Optional[uint32]:
+    def get_farmed_height(self, parent_coin_info: bytes32, confirmed_block_index: uint32) -> Optional[uint32]:
         # Returns the height farmed if it's a coinbase reward, otherwise None
         for block_index in range(
             confirmed_block_index, confirmed_block_index - 128, -1
@@ -336,7 +336,7 @@ class FullNodeRpcApi:
 
         delay_time, delay_ph = get_delayed_puz_info_from_launcher_spend(singleton_spend)
 
-        farmed_height = get_farmed_height(reward_coin_parent_info, reward_confirmed_height)
+        farmed_height = self.get_farmed_height(reward_coin_parent_info, reward_confirmed_height)
 
         absorb_spend: List[CoinSpend] = create_absorb_spend(
             singleton_tip,
