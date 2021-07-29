@@ -171,6 +171,7 @@ class CoinStore:
         puzzle_hashes: List[bytes32],
         start_height: uint32 = uint32(0),
         end_height: uint32 = uint32((2 ** 32) - 1),
+        exclude_non_coinbase: bool = False
     ) -> List[CoinRecord]:
         if len(puzzle_hashes) == 0:
             return []
