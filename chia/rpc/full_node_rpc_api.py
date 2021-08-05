@@ -365,9 +365,9 @@ class FullNodeRpcApi:
                     error = None
 
         if (error is None):
-            return {"status":status,"created_coin_name":bundle.additions()[1].name()}
+            return {"status":status,"farmed_height":farmed_height,"created_coin_name":bundle.additions()[1].name()}
         
-        return {"status":status,"error":error.value,"created_coin_name":""}
+        return {"status":status,"error":error}
 
     async def get_delayed_puzzle_info_from_launcher_id(self, request: Dict):
         launcher_id = bytes.fromhex(request["launcher_id"])
