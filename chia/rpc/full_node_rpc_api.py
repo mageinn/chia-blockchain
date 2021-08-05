@@ -352,7 +352,7 @@ class FullNodeRpcApi:
 
         bundle = SpendBundle(absorb_spend, G2Element())
         bundle_name = bundle.name()
-
+        
         if self.service.mempool_manager.get_spendbundle(bundle_name) is not None:
             status = MempoolInclusionStatus.SUCCESS
             error = None
@@ -365,9 +365,9 @@ class FullNodeRpcApi:
                     error = None
 
         if (error is None):
-            return {"status":status}
+            return {"status":status,"created_coin_name":bundle.additions()[1].name()}
         
-        return {"status":status,"error":error.value}
+        return {"status":status,"error":error.value,"created_coin_name":""}
 
     async def get_delayed_puzzle_info_from_launcher_id(self, request: Dict):
         launcher_id = bytes.fromhex(request["launcher_id"])
