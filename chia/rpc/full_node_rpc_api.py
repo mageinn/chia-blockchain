@@ -365,7 +365,7 @@ class FullNodeRpcApi:
                     error = None
 
         if (error is None):
-            return {"status":status,"farmed_height":farmed_height,"created_coin_name":bundle.additions()[1].name()}
+            return {"status":status,"farmed_height":farmed_height,"created_coin_name":bundle.additions()[1].name().hex()}
         
         return {"status":status,"error":error}
 
