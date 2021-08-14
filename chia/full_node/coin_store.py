@@ -142,6 +142,14 @@ class CoinStore:
                 coins.append(coin_record)
         return coins
 
+    async def get_unique_address_count(self) -> int:
+        cursor = await self.coin_record_db.execute(
+            f"SELECT count(DISTINCT puzzle_hash) "
+            f"FROM coin_record");
+        rows = await cursor.fetchall();
+        await cursor.close();
+        return int(rows[0][0]);
+
     # Checks DB and DiffStores for CoinRecords with puzzle_hash and returns them
     async def get_coin_records_by_puzzle_hash(
         self,

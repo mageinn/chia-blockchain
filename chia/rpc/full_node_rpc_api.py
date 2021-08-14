@@ -69,6 +69,7 @@ class FullNodeRpcApi:
             "/get_pool_state_from_coin_spend": self.get_pool_state_from_coin_spend,
             "/confirm_signage_point_or_eos": self.confirm_signage_point_or_eos,
             # Coins
+            "/get_unique_address_count": self.get_unique_address_count,
             "/get_coin_records_by_puzzle_hash": self.get_coin_records_by_puzzle_hash,
             "/get_coin_records_by_puzzle_hashes": self.get_coin_records_by_puzzle_hashes,
             "/get_coin_record_by_name": self.get_coin_record_by_name,
@@ -801,6 +802,9 @@ class FullNodeRpcApi:
             * eligible_plots_filter_multiplier
         )
         return {"space": uint128(int(network_space_bytes_estimate))}
+
+    async def get_unique_address_count(self, request: Dict) -> Optional[Dict]:
+        addres_count =await self.service.blockchain.coin_store.get_unique_address_count();
 
     async def get_coin_records_by_puzzle_hash(self, request: Dict) -> Optional[Dict]:
         """
