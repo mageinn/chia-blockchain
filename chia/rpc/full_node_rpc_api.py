@@ -98,6 +98,14 @@ class FullNodeRpcApi:
         return []
     
     #Helper Method Area
+    async def get_or_load_block_record(self, header_hash: bytes32) -> Optional[BlockRecord]:
+        b_record: Optional[BlockRecord] = self.service.blockchain.try_block_record(hint_b_hash)
+
+        if (b_record is None):
+            b_record = await self.service.block_store.get_block_record(hint_b_hash)
+
+        return b_record
+
     def get_farmed_height(self, parent_coin_info: bytes32, confirmed_block_index: uint32) -> Optional[uint32]:
         # Returns the height farmed if it's a coinbase reward, otherwise None
         for block_index in range(
@@ -419,13 +427,13 @@ class FullNodeRpcApi:
             self.service.log.warning("hint_b_hash is None")
             return {"valid": False} #This should never happen because of the processing delay but you never know
 
-        next_b: Optional[BlockRecord] = self.service.blockchain.try_block_record(hint_b_hash)
+        next_b: Optional[BlockRecord] = self.get_or_load_block_record(hint_b_hash)
 
         if (next_b is None):
             self.service.log.warning("next_b is None")
             return {"valid": False} #This should never happen because of the processing delay but you never know
 
-        curr_b: Optional[BlockRecord] = self.service.blockchain.try_block_record(next_b.prev_hash)
+        curr_b: Optional[BlockRecord] = await self.get_or_load_block_record(next_b.prev_hash)
         if (curr_b is None):
             self.service.log.warning("curr_b is None")
             return {"valid": False} #This should never happen because of the processing delay but you never know
@@ -436,7 +444,8 @@ class FullNodeRpcApi:
 
                 next_b_total_iters = next_b.total_iters #Total Iters when fully infused
 
-                self.service.log.warning("cc_iters " + str(cc_iters) +  " next_b_total_iters " + str(next_b_total_iters) + " sp_total_iters " + str(sp_total_iters))
+                if (next_b_total_iters < sp_total_iters):
+                    self.service.log.warning("cc_iters " + str(cc_iters) +  " next_b_total_iters " + str(next_b_total_iters) + " sp_total_iters " + str(sp_total_iters))
 
                 return {"valid": next_b_total_iters >= sp_total_iters}
                 
@@ -446,12 +455,13 @@ class FullNodeRpcApi:
                     if eos_rc == rc_challenge:
                         next_b_total_iters = next_b.total_iters
 
-                        self.service.log.warning("cc_iters " + str(cc_iters) +  " next_b_total_iters " + str(next_b_total_iters) + " sp_total_iters " + str(sp_total_iters))
+                        if (next_b_total_iters < sp_total_iters):
+                            self.service.log.warning("cc_iters " + str(cc_iters) +  " next_b_total_iters " + str(next_b_total_iters) + " sp_total_iters " + str(sp_total_iters))
 
                         return {"valid": next_b_total_iters >= sp_total_iters}
 
             next_b = curr_b
-            curr_b_optional = self.service.blockchain.try_block_record(curr_b.prev_hash)
+            curr_b_optional = self.get_or_load_block_record(curr_b.prev_hash)
             if curr_b_optional is None:
                 break
             curr_b = curr_b_optional
