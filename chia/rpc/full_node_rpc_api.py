@@ -99,10 +99,10 @@ class FullNodeRpcApi:
     
     #Helper Method Area
     async def get_or_load_block_record(self, header_hash: bytes32) -> Optional[BlockRecord]:
-        b_record: Optional[BlockRecord] = self.service.blockchain.try_block_record(hint_b_hash)
+        b_record: Optional[BlockRecord] = self.service.blockchain.try_block_record(header_hash)
 
         if (b_record is None):
-            b_record = await self.service.block_store.get_block_record(hint_b_hash)
+            b_record = await self.service.block_store.get_block_record(header_hash)
 
         return b_record
 
