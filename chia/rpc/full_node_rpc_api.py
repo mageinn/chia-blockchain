@@ -427,7 +427,7 @@ class FullNodeRpcApi:
             self.service.log.warning("hint_b_hash is None")
             return {"valid": False} #This should never happen because of the processing delay but you never know
 
-        next_b: Optional[BlockRecord] = self.get_or_load_block_record(hint_b_hash)
+        next_b: Optional[BlockRecord] = await self.get_or_load_block_record(hint_b_hash)
 
         if (next_b is None):
             self.service.log.warning("next_b is None")
@@ -461,7 +461,7 @@ class FullNodeRpcApi:
                         return {"valid": next_b_total_iters >= sp_total_iters}
 
             next_b = curr_b
-            curr_b_optional = self.get_or_load_block_record(curr_b.prev_hash)
+            curr_b_optional = await self.get_or_load_block_record(curr_b.prev_hash)
             if curr_b_optional is None:
                 break
             curr_b = curr_b_optional
