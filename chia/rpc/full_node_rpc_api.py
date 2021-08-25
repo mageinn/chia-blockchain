@@ -313,15 +313,17 @@ class FullNodeRpcApi:
     async def check_relative_lock_height(self, request: Dict):
         coin_id = bytes.fromhex(request["coin_id"])      
         relative_lock_height = int(request["relative_lock_height"])
-        coin_record = await self.service.blockchain.coin_store.get_coin_record(coin_id)
 
-        if (coin_record is None):
-            return {"valid": False}
+        coin_record = await self.service.blockchain.coin_store.get_coin_record(coin_id)
+        assert coin_record is not None
 
         peak: Optional[BlockRecord] = self.service.blockchain.get_peak()
-        peak_height = peak.height
-        valid = peak_height - coin_record.confirmed_block_index > relative_lock_height
+        assert peak is not None
 
+        if (not coin_record.spent):
+            return {"valid": False}
+
+        valid = peak.height - coin_record.confirmed_block_index > relative_lock_height
         return {"valid": valid}
 
     async def absorb_singleton_reward(self, request: Dict):
